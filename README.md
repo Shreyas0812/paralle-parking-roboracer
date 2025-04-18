@@ -15,3 +15,9 @@ Note: Make sure you are at the correct location as given by the text before `$`
 ```bash
 /paralle-parking-roboracer$ rosdep install --from-paths src -y --ignore-src
 ```
+
+#### manual waypoint logging:
+
+```bash
+paralle-parking-roboracer$ ros2 launch parallel_parking record_manual_wp.launch.py 
+```
