@@ -8,7 +8,6 @@ def generate_launch_description():
     scan_topic = "/scan"
     pose_topic = "/ego_racecar/odom"
     visualize_wp_topic = "/visualization/waypoints"
-    visualize_next_wp_topic = "/visualization/next_waypoint"
     next_wp_topic = "/next_waypoint"
     original_map_topic = "/map"
     occupancy_grid_topic = "/occupancy_grid"
@@ -21,7 +20,7 @@ def generate_launch_description():
     map_resolution = 0.05
     map_origin = [-20.2, -5.68]
 
-    expand_occ_size = 5
+    expand_occ_size = 1
 
     return LaunchDescription([
         # parallel_parking node
@@ -39,11 +38,7 @@ def generate_launch_description():
             output="screen",
             parameters=[
                 {"waypoint_file_name": waypoint_file_name},
-                {"pose_topic": pose_topic},
                 {"visualize_wp_topic": visualize_wp_topic},
-                {"visualize_next_wp_topic": visualize_next_wp_topic},
-                {"lookahead_distance": lookahead_distance},
-                {"y_ego_threshold": y_ego_threshold}
             ]
         ),
         # RRT node
