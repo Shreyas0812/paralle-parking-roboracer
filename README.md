@@ -21,3 +21,4 @@ Note: Make sure you are at the correct location as given by the text before `$`
 ```bash
 paralle-parking-roboracer$ ros2 launch parallel_parking record_manual_wp.launch.py 
 ```
+After this, use 'goal_pose' on rviz to see the points
