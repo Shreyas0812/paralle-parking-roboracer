@@ -1,0 +1,4 @@
+[submodule "src/f1tenth_gym_ros"]
+	path = src/f1tenth_gym_ros
+	url = https://github.com/Shreyas0812/f1tenth_gym_ros.git
+	branch = parallel-parking-roboracer
