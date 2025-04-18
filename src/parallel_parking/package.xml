@@ -4,7 +4,10 @@
   <name>parallel_parking</name>
   <version>0.0.0</version>
   <description>Sampling Based Adaptive Motion Planning</description>
-  <maintainer email="raorane@seas.upenn.edu">shreyas</maintainer>
+  <maintainer email="raorane@seas.upenn.edu">Shreyas</maintainer>
+  <maintainer email="eshen@seas.upenn.edu">Eddie</maintainer>
+  <maintainer email="yufeiyg@seas.upenn.edu">Yufeiyang</maintainer>
+  <maintainer email="runxuan@seas.upenn.edu">Jerry</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
