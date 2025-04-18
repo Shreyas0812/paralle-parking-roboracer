@@ -6,3 +6,7 @@
 **/install/**
 
 **/__pycache__/**
+
+
+# Add Later as Submodule
+src/f1tenth_gym_ros
