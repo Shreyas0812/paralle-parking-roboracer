@@ -36,7 +36,6 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   scripts/parallel_parking_node.py
   scripts/visualize_node.py
-  scripts/rrt_node.py
   scripts/occupancy_grid_node.py
   scripts/next_waypoint_node.py
   scripts/record_manual_wp_node.py

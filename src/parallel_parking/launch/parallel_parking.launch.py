@@ -36,38 +36,6 @@ def generate_launch_description():
         #     name="parallel_parking_node",
         #     output="screen",
         # )
-        # RRT node
-        Node(
-            package="parallel_parking",
-            executable="rrt_node.py",
-            name="rrt_node",
-            output="screen",
-            parameters=[
-                {"pose_topic": pose_topic},
-                {"occupancy_grid_topic": occupancy_grid_topic},
-                {"next_wp_topic": next_wp_topic},
-                {"map_height": map_height},
-                {"map_width": map_width},
-                {"map_resolution": map_resolution},
-                {"map_origin": map_origin},
-            ]
-        ),
-        # RRT node
-        Node(
-            package="parallel_parking",
-            executable="rrt_node.py",
-            name="rrt_node",
-            output="screen",
-            parameters=[
-                {"pose_topic": pose_topic},
-                {"occupancy_grid_topic": occupancy_grid_topic},
-                {"next_wp_topic": next_wp_topic},
-                {"map_height": map_height},
-                {"map_width": map_width},
-                {"map_resolution": map_resolution},
-                {"map_origin": map_origin},
-            ]
-        ),
         # Occupancy grid node
         Node(
             package="parallel_parking",
