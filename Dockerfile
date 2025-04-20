@@ -1,24 +1,4 @@
-# MIT License
-
-# Copyright (c) 2020 Hongrui Zheng
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# ROS2 Humble + F1TENTH Gym + NVIDIA CUDA 11.8
 
 FROM ros:humble
 
@@ -69,8 +49,7 @@ COPY . /sim_ws/src/f1tenth_gym_ros
 RUN source /opt/ros/humble/setup.bash && \
     cd sim_ws/ && \
     apt-get update --fix-missing && \
-    rosdep install -i --from-path src --rosdistro humble -y && \
-    colcon build
+    rosdep install -i --from-path src --rosdistro humble -y
 
 RUN apt update && apt install -y ros-humble-tf-transformations
 RUN apt-get update && apt-get install -y python3-matplotlib \
@@ -83,4 +62,10 @@ RUN pip3 install torch torchvision torchaudio --index-url https://download.pytor
 RUN pip install numpy==1.24
 
 WORKDIR '/sim_ws'
+RUN source /opt/ros/humble/setup.bash && \
+    colcon build && \
+    source install/setup.bash && \
+    echo "source /sim_ws/install/setup.bash" >> ~/.bashrc && \
+    echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+
 ENTRYPOINT ["/bin/bash"]
