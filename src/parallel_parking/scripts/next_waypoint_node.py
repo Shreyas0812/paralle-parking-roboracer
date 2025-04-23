@@ -25,15 +25,13 @@ class NextWaypoint(Node):
         self.declare_parameter('waypoint_file_name', 'waypoints_park1.csv')
         self.declare_parameter('pose_topic', '/ego_racecar/odom')
         self.declare_parameter('next_wp_topic', '/next_waypoint')
-        self.declare_parameter('lookahead_distance', 0.8)
-        self.declare_parameter('y_ego_threshold', 1.2)
+        self.declare_parameter('lookahead_distance', 0.04)
         
         waypoint_file_name = self.get_parameter('waypoint_file_name').get_parameter_value().string_value
         pose_topic = self.get_parameter('pose_topic').get_parameter_value().string_value
         next_wp_topic = self.get_parameter('next_wp_topic').get_parameter_value().string_value
 
         self.lookahead_distance = self.get_parameter('lookahead_distance').get_parameter_value().double_value
-        self.y_ego_threshold = self.get_parameter('y_ego_threshold').get_parameter_value().double_value
 
         package_share_dir = get_package_share_directory("parallel_parking")
 
@@ -50,6 +48,9 @@ class NextWaypoint(Node):
 
         self.next_waypoint_publisher_ = self.create_publisher(PointStamped, next_wp_topic, qos_profile)
 
+
+        self.wp_index_final = 0
+
     def pose_callback(self, msg):
         # Curret pose of the vehicle
         pos_x = msg.pose.pose.position.x
@@ -63,54 +64,33 @@ class NextWaypoint(Node):
         euler = quat2euler([qw, qx, qy, qz])
         yaw = euler[2]
 
-        wp_ego, wp_index =  self.find_lookup_waypoint(pos_x, pos_y, yaw)
 
-        next_wp_index = wp_index + 1
-        if wp_index == len(self.waypoints)-1:
-            next_wp_index = 0
+        # TODO: We can use some other parameters to determine the next waypoint as well 
 
-        wp_ego_next = self.waypoints[next_wp_index]
+        # 2 point parking
+        wp1_index = 0
+        wp1 = self.waypoints[wp1_index] # 1st point -- Right beside the car in front
+
+        wp2_index = 1
+        wp2 = self.waypoints[wp2_index] #2nd point -- Parking spot
+
+        # Distance from the car to the 1st point
+        dx = wp1[0] - pos_x
+        dy = wp1[1] - pos_y
+        distance = np.sqrt(dx**2 + dy**2)
+
+        yaw_diff = abs(wp1[2] - yaw)
+
+        if self.wp_index_final != wp2_index:
+
+            if distance < self.lookahead_distance and yaw_diff < 0.1:
+                self.wp_index_final = wp2_index
+            else:
+                self.wp_index_final = wp1_index
+
+        wp_ego_next = self.waypoints[self.wp_index_final]
 
         self.publish_next_waypoint(wp_ego_next)
-
-    def find_lookup_waypoint(self, pos_x, pos_y, yaw):
-
-        waypoints_ego = []
-        distances = []
-        indices = []
-
-        for i, waypoint in enumerate(self.waypoints):
-            wp_x, wp_y, wp_yaw, _, _, _, _ = waypoint
-            
-            dx = wp_x - pos_x
-            dy = wp_y - pos_y
-
-            distance = np.sqrt(dx**2 + dy**2)
-
-            x_ego = dx * np.cos(-yaw) - dy * np.sin(-yaw)
-            y_ego = dx * np.sin(-yaw) + dy * np.cos(-yaw)
-
-            if x_ego >= 0 and abs(y_ego) <= self.y_ego_threshold:
-                waypoints_ego.append((wp_x, wp_y))
-                distances.append(distance)
-                indices.append(i)
-
-
-        distances = np.array(distances)
-        waypoints_ego = np.array(waypoints_ego)
-
-        if len(waypoints_ego) != 0:
-            
-            distances[distances < self.lookahead_distance] = np.inf
-            min_index = np.argmin(distances)
-
-            self.prev_valid_index = min_index
-            self.prev_ego_waypoints = waypoints_ego
-
-            return waypoints_ego[min_index], indices[min_index]
-        
-        else:
-            return self.prev_ego_waypoints[self.prev_valid_index], self.prev_valid_index
 
     def publish_next_waypoint(self, next_wp):
         # NOTE: We Can change this to more complicated waypoint message if needed

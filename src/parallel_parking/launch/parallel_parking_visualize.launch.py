@@ -12,7 +12,7 @@ def generate_launch_description():
     original_map_topic = "/map"
     occupancy_grid_topic = "/occupancy_grid"
     
-    lookahead_distance = 0.8
+    lookahead_distance = 0.1
     y_ego_threshold = 1.2
     
     map_height = 713
