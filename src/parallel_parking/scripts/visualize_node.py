@@ -27,7 +27,7 @@ class VisualizeNode(Node):
         super().__init__("visualize_node")
         self.get_logger().info("Visualize Node Launched")
 
-        self.declare_parameter('waypoint_file_name', 'waypoints_levine.csv')
+        self.declare_parameter('waypoint_file_name', 'waypoints_park1.csv')
         self.declare_parameter('visualize_wp_topic', '/visualization/waypoints')
 
         waypoint_file_name = self.get_parameter('waypoint_file_name').get_parameter_value().string_value
