@@ -84,12 +84,14 @@ class ParallelParkingNode(Node):
                                           pose_msg.pose.pose.orientation.z])[2]
 
         if not hasattr(self, 'occupancy_grid'):
-            self.get_logger().error("Occupancy grid not received yet.")
+            self.get_logger().error("Occupancy grid not received yet.", throttle_duration_sec=1.0)
             return
         
         if not hasattr(self, 'next_waypoint'):
-            self.get_logger().error("Next waypoint not received yet.")
+            self.get_logger().error("Next waypoint not received yet.", throttle_duration_sec=1.0)
             return
+        
+        self.get_logger().info("\n\nREADY...\n\n", once=True)
 
         # self.get_logger().info(f"Current position: {self.cur_pos}, Current yaw: {self.cur_yaw}, Next waypoint: {self.next_waypoint}")
         
