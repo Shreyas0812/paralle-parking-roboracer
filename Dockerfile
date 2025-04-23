@@ -10,7 +10,7 @@ RUN apt-get update --fix-missing && \
                        nano \
                        vim \
                        wget \
-                       python3-pip \
+                       python3-pip3 \
                        libeigen3-dev \
                        tmux \
                        ros-humble-rviz2
@@ -22,15 +22,21 @@ RUN apt-get update && apt-get install -y gnupg2 curl && \
     apt-get update
 
                    
+# Install CUDA 12.1 + cuDNN 9
 RUN apt-get install -y \
-    cuda-toolkit-11-8 \
-    libcudnn8 libcudnn8-dev \
+    cuda-toolkit-12-1 \
+    cuda-compiler-12-1 \
+    libcudnn9-cuda-12 libcudnn9-dev-cuda-12 \
+    libnccl2 libnccl-dev \
     libnvinfer8 libnvinfer-dev \
     libnvonnxparsers8 \
     libnvparsers8 \
     libnvinfer-plugin8 \
-    python3-libnvinfer \
-    && rm -rf /var/lib/apt/lists/*
+    python3-libnvinfer && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set environment paths for CUDA 12.1
+ENV PATH="/usr/local/cuda-12.1/bin:${PATH}"
 
 
 RUN apt-get -y dist-upgrade
@@ -56,10 +62,21 @@ RUN apt-get update && apt-get install -y python3-matplotlib \
                                                 libprotoc-dev \
                                                 protobuf-compiler
 
-RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 
-RUN pip install numpy==1.24
+# RUN pip3 install https://storage.googleapis.com/jax-releases/cuda11/jaxlib-0.4.7+cuda11.cudnn86-cp310-cp310-manylinux2014_x86_64.whl \
+#     && pip3 install jax==0.4.7
+RUN pip3 install --upgrade pip
+RUN pip3 install --upgrade "jax[cuda12]" && pip3 install flax
+
+
+# Create JAX cache directory and ensure it's writable
+RUN mkdir -p /cache/jax && chmod -R 777 /cache/jax
+
+RUN pip3 install numpy==1.25
+RUN pip3 install matplotlib
 
 WORKDIR '/sim_ws'
 RUN source /opt/ros/humble/setup.bash && \
