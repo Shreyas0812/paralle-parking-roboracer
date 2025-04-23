@@ -93,14 +93,7 @@ class ParallelParkingNode(Node):
         
         self.get_logger().info("\n\nREADY...\n\n", once=True)
 
-        # self.get_logger().info(f"Current position: {self.cur_pos}, Current yaw: {self.cur_yaw}, Next waypoint: {self.next_waypoint}")
         
-        # current position: self.cur_pos
-        # current yaw: self.cur_yaw
-        # occupancy grid: self.occupancy_grid
-        # next waypoint: self.next_waypoint
-
-        # Implement RRT algorithm here
 
 
 def main(args=None):

@@ -73,4 +73,14 @@ def generate_launch_description():
                 {"y_ego_threshold": y_ego_threshold}
             ]
         ),
+        # MPC node
+        Node(
+            package="parallel_parking",
+            executable="mpc_node.py",
+            name="mpc_node",
+            output="screen",
+            parameters=[
+                {"pose_topic": pose_topic}
+            ]
+        ),
     ])

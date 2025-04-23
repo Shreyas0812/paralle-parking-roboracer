@@ -39,6 +39,7 @@ install(PROGRAMS
   scripts/occupancy_grid_node.py
   scripts/next_waypoint_node.py
   scripts/record_manual_wp_node.py
+  scripts/mpc_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
