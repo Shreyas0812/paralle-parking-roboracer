@@ -65,7 +65,7 @@ class NextWaypoint(Node):
         yaw = euler[2]
 
 
-        # TODO: We can use some other parameters to determine the next waypoint as well 
+        # TODO: We can use some other parameters to determine the next waypoint as well, such as check the current velocity of the car, if positive something, if -ve something else, etc.
 
         # 2 point parking
         wp1_index = 0
