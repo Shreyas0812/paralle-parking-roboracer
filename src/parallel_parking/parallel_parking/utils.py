@@ -127,3 +127,95 @@ def update_grid_with_ray(
                 grid[new_y, new_x] = 100  # Occupied cell
 
     return grid
+
+
+def normalize_angle(angle: float) -> float:
+    """
+    Normalize an angle to the range [-pi, pi].
+    
+    Args:
+        angle (float): Angle in radians.
+        
+    Returns:
+        float: Normalized angle in radians.
+    """
+    return (angle + np.pi) % (2 * np.pi) - np.pi
+
+def generateAckermannWaypoints(
+        start_x: float = 0.0,
+        start_y: float = 0.0,
+        start_yaw: float = 0.0,
+        goal_x: float = 0.0,
+        goal_y: float = 0.0,
+        goal_yaw: float = 0.0,
+        wheelbase: float = 0.32,
+        dt: float = 0.1,
+        max_steering_angle: float = 0.52,
+        velocity: float = 1.0,
+):
+    """
+    Generate waypoints for an Ackermann vehicle from start to goal position/orientation
+    
+    Args:
+        start_x, start_y: Initial position
+        start_yaw: Initial orientation (radians)
+        goal_x, goal_y: Goal position
+        goal_yaw: Goal orientation (radians)
+        wheelbase: Vehicle wheelbase (distance between front and rear axles)
+        dt: Time step for simulation
+        max_steering_angle: Maximum steering angle in radians
+        velocity: Constant velocity for path generation
+        
+    Returns:
+        waypoints: List of (x, y, yaw) tuples representing the vehicle path
+    """
+
+    # Initialize current state
+    x, y, yaw = start_x, start_y, start_yaw
+
+    k_p = 0.5  
+    lookahead_distance = 0.5  
+
+    pos_threshold = 0.2
+    yaw_threshold = np.deg2rad(5)
+
+    waypoints = [(x, y, yaw)]
+
+    max_time = 30.0
+    time = 0.0
+
+    while time < max_time:
+        dist_to_goal = np.sqrt((goal_x - x) ** 2 + (goal_y - y) ** 2)
+
+        if dist_to_goal < pos_threshold:
+            break
+            yaw_error = normalize_angle(goal_yaw - yaw)
+            if abs(yaw_error) < yaw_threshold:
+                break # Reached goal
+
+            steering_angle = np.clip(k_p * yaw_error, -max_steering_angle, max_steering_angle)
+
+            current_velocity = min(velocity, 1.0)
+
+        else:
+            angle_to_goal = np.arctan2(goal_y - y, goal_x - x)
+            yaw_error = normalize_angle(angle_to_goal - yaw)
+
+            ld = min(lookahead_distance, dist_to_goal)
+            steering_angle = np.arctan2(2 * wheelbase * np.sin(yaw_error), ld)
+
+            steering_angle = np.clip(steering_angle, -max_steering_angle, max_steering_angle)
+
+            current_velocity = velocity
+        
+        # Update state
+        x += current_velocity * np.cos(yaw) * dt
+        y += current_velocity * np.sin(yaw) * dt
+        yaw += (current_velocity / wheelbase) * np.tan(steering_angle) * dt
+        yaw = normalize_angle(yaw)
+
+        waypoints.append((x, y, yaw))
+
+        time += dt
+        
+    return waypoints

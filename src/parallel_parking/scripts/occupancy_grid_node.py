@@ -102,10 +102,10 @@ class OccupancyGridNode(Node):
         # Process the LaserScan message
         
         if not hasattr(self, 'occupancy_grid'):
-            self.get_logger().warn("Occupancy grid not set yet. Waiting for map data...")
+            self.get_logger().warn("Occupancy grid not set yet. Waiting for map data...", throttle_duration_sec=1.0)
             return
         if not hasattr(self, 'cur_pos') or not hasattr(self, 'cur_yaw'):
-            self.get_logger().warn("Current position or yaw not set yet. Waiting for pose data...")
+            self.get_logger().warn("Current position or yaw not set yet. Waiting for pose data...", throttle_duration_sec=1.0)
             return
         
         # Convert the scan data to a numpy array

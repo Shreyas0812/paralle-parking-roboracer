@@ -1,0 +1,469 @@
+##################################################################################################################################
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import math
+
+class AckermannVehicle:
+    def __init__(self, x=0.0, y=0.0, yaw=0.0, velocity=0.0, wheelbase=1.0):
+        # State: position, orientation, velocity
+        self.x = x
+        self.y = y
+        self.yaw = yaw
+        self.velocity = velocity
+        self.wheelbase = wheelbase  # Distance between front and rear axles
+        self.max_steering_angle = np.deg2rad(30)  # Maximum steering angle in radians
+        self.max_acceleration = 1.0  # m/s^2
+        self.dt = 0.1  # Simulation time step
+
+    def update(self, steering_angle, acceleration):
+        """Update the vehicle state based on control inputs"""
+        # Limit steering angle
+        steering_angle = np.clip(steering_angle, -self.max_steering_angle, self.max_steering_angle)
+        
+        # Update velocity with acceleration
+        self.velocity += acceleration * self.dt
+        
+        # Kinematics update (bicycle model)
+        self.x += self.velocity * np.cos(self.yaw) * self.dt
+        self.y += self.velocity * np.sin(self.yaw) * self.dt
+        self.yaw += self.velocity * np.tan(steering_angle) / self.wheelbase * self.dt
+        
+        # Normalize yaw angle
+        self.yaw = normalize_angle(self.yaw)
+        
+        return self.x, self.y, self.yaw
+    
+    def get_state(self):
+        return self.x, self.y, self.yaw, self.velocity
+
+
+class AckermannController:
+    def __init__(self, lookahead_distance=1.5, k_p_v=0.8, k_p_yaw=1.0, threshold_distance=0.2, threshold_yaw=np.deg2rad(5)):
+        # Controller parameters
+        self.lookahead_distance = lookahead_distance  # For pure pursuit
+        self.k_p_v = k_p_v  # Proportional gain for velocity control
+        self.k_p_yaw = k_p_yaw  # Proportional gain for final yaw alignment
+        self.threshold_distance = threshold_distance  # Distance considered "reached"
+        self.threshold_yaw = threshold_yaw  # Yaw angle considered "aligned"
+        
+    def control(self, vehicle, goal_x, goal_y, goal_yaw):
+        """
+        Compute control inputs (steering angle and acceleration) to reach goal
+        """
+        x, y, yaw, velocity = vehicle.get_state()
+        
+        # Calculate distance to goal
+        distance_to_goal = np.sqrt((goal_x - x)**2 + (goal_y - y)**2)
+        
+        # If close to goal, focus on aligning with goal orientation
+        if distance_to_goal < self.threshold_distance:
+            # Slow down as we approach the goal
+            desired_velocity = 0.0
+            acceleration = (desired_velocity - velocity) * self.k_p_v
+            
+            # Align with goal orientation
+            yaw_error = normalize_angle(goal_yaw - yaw)
+            steering_angle = self.k_p_yaw * yaw_error
+            
+            # Check if goal is reached
+            goal_reached = (abs(yaw_error) < self.threshold_yaw)
+            
+            return steering_angle, acceleration, goal_reached
+        
+        # Otherwise, use pure pursuit to reach the goal position
+        else:
+            # Calculate angle to goal
+            angle_to_goal = math.atan2(goal_y - y, goal_x - x)
+            
+            # Calculate steering angle using pure pursuit
+            alpha = normalize_angle(angle_to_goal - yaw)
+            
+            # Modified pure pursuit for direct goal seeking
+            ld = min(self.lookahead_distance, distance_to_goal)
+            steering_angle = math.atan2(2.0 * vehicle.wheelbase * math.sin(alpha), ld)
+            
+            # Adjust velocity proportional to distance from goal and steering angle
+            desired_velocity = max(0.5, min(2.0, distance_to_goal)) * (1 - abs(steering_angle) / vehicle.max_steering_angle * 0.5)
+            acceleration = (desired_velocity - velocity) * self.k_p_v
+            
+            return steering_angle, acceleration, False
+
+
+def normalize_angle(angle):
+    """Normalize angle to be between -pi and pi"""
+    while angle > np.pi:
+        angle -= 2.0 * np.pi
+    while angle < -np.pi:
+        angle += 2.0 * np.pi
+    return angle
+
+
+def simulate_vehicle_control(start_x=0.0, start_y=0.0, start_yaw=0.0, 
+                           goal_x=10.0, goal_y=10.0, goal_yaw=np.pi/4,
+                           max_time=30.0, animate=True):
+    """
+    Simulate vehicle control from start position/orientation to goal
+    """
+    # Initialize vehicle and controller
+    vehicle = AckermannVehicle(x=start_x, y=start_y, yaw=start_yaw)
+    controller = AckermannController()
+    
+    # For storing trajectory
+    trajectory_x = [vehicle.x]
+    trajectory_y = [vehicle.y]
+    
+    # Time tracking
+    t = 0
+    dt = vehicle.dt
+    
+    # Control loop
+    goal_reached = False
+    
+    while t < max_time and not goal_reached:
+        # Compute control inputs
+        steering_angle, acceleration, goal_reached = controller.control(
+            vehicle, goal_x, goal_y, goal_yaw)
+        
+        # Update vehicle state
+        vehicle.update(steering_angle, acceleration)
+        
+        # Store trajectory point
+        trajectory_x.append(vehicle.x)
+        trajectory_y.append(vehicle.y)
+        
+        # Update time
+        t += dt
+        
+        # Print progress (optional)
+        if t % 1 < dt:  # Print every 1 second of simulation time
+            x, y, yaw, vel = vehicle.get_state()
+            distance = np.sqrt((goal_x - x)**2 + (goal_y - y)**2)
+            yaw_error = normalize_angle(goal_yaw - yaw)
+            print(f"Time: {t:.1f}s, Pos: ({x:.2f}, {y:.2f}), Yaw: {np.rad2deg(yaw):.1f}°, "
+                  f"Distance to goal: {distance:.2f}m, Yaw error: {np.rad2deg(yaw_error):.1f}°")
+    
+    # Final state
+    x, y, yaw, vel = vehicle.get_state()
+    if goal_reached:
+        print(f"Goal reached at time {t:.1f}s!")
+    else:
+        print("Max time exceeded, goal not reached.")
+    print(f"Final position: ({x:.2f}, {y:.2f}), orientation: {np.rad2deg(yaw):.1f}°")
+    
+    # Visualize results
+    if animate:
+        visualize_trajectory(trajectory_x, trajectory_y, goal_x, goal_y, vehicle.wheelbase)
+    
+    return trajectory_x, trajectory_y
+
+
+def visualize_trajectory(traj_x, traj_y, goal_x, goal_y, wheelbase):
+    """Visualize the vehicle trajectory"""
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Plot the trajectory
+    ax.plot(traj_x, traj_y, 'b-', label='Vehicle Trajectory')
+    
+    # Plot start and goal positions
+    ax.plot(traj_x[0], traj_y[0], 'go', markersize=10, label='Start')
+    ax.plot(goal_x, goal_y, 'ro', markersize=10, label='Goal')
+    
+    # Set equal aspect ratio
+    ax.set_aspect('equal')
+    ax.grid(True)
+    ax.set_xlabel('X [m]')
+    ax.set_ylabel('Y [m]')
+    ax.set_title('Ackermann Vehicle Trajectory')
+    ax.legend()
+    
+    plt.show()
+
+
+def create_animation(traj_x, traj_y, vehicle_length=2.0, vehicle_width=1.0):
+    """Create an animation of the vehicle motion"""
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    def draw_vehicle(x, y, yaw, length=vehicle_length, width=vehicle_width):
+        # Vehicle outline coordinates (rectangle)
+        outline_x = [-length/2, length/2, length/2, -length/2, -length/2]
+        outline_y = [width/2, width/2, -width/2, -width/2, width/2]
+        
+        # Rotate and translate
+        rot = np.array([
+            [np.cos(yaw), -np.sin(yaw)],
+            [np.sin(yaw), np.cos(yaw)]
+        ])
+        
+        rotated = np.dot(rot, np.vstack([outline_x, outline_y]))
+        
+        outline_x = rotated[0, :] + x
+        outline_y = rotated[1, :] + y
+        
+        return outline_x, outline_y
+    
+    # Initialize plot
+    ax.set_xlim(min(traj_x) - vehicle_length, max(traj_x) + vehicle_length)
+    ax.set_ylim(min(traj_y) - vehicle_length, max(traj_y) + vehicle_length)
+    ax.set_aspect('equal')
+    ax.grid(True)
+    
+    # Plot full trajectory
+    traj_line, = ax.plot([], [], 'b-', linewidth=1)
+    vehicle_outline, = ax.plot([], [], 'r-', linewidth=2)
+    
+    def init():
+        traj_line.set_data([], [])
+        vehicle_outline.set_data([], [])
+        return traj_line, vehicle_outline
+    
+    def animate(i):
+        # Get vehicle state at this time step
+        x, y = traj_x[i], traj_y[i]
+        
+        # Calculate yaw from trajectory (approximate)
+        if i < len(traj_x) - 1:
+            dx = traj_x[i+1] - traj_x[i]
+            dy = traj_y[i+1] - traj_y[i]
+            yaw = np.arctan2(dy, dx)
+        else:
+            # Use the previous yaw for the last frame
+            dx = traj_x[i] - traj_x[i-1]
+            dy = traj_y[i] - traj_y[i-1]
+            yaw = np.arctan2(dy, dx)
+        
+        # Draw trajectory up to current point
+        traj_line.set_data(traj_x[:i+1], traj_y[:i+1])
+        
+        # Draw vehicle
+        outline_x, outline_y = draw_vehicle(x, y, yaw)
+        vehicle_outline.set_data(outline_x, outline_y)
+        
+        return traj_line, vehicle_outline
+    
+    num_frames = len(traj_x)
+    
+    anim = FuncAnimation(fig, animate, frames=range(0, num_frames, max(1, num_frames//100)),
+                        init_func=init, blit=True, interval=50)
+    
+    plt.title('Ackermann Vehicle Motion')
+    plt.xlabel('X [m]')
+    plt.ylabel('Y [m]')
+    
+    plt.show()
+
+
+# Example usage
+if __name__ == "__main__":
+    # Define start and goal states
+    start_x, start_y, start_yaw = 0.0, 0.0, 0.0
+    goal_x, goal_y, goal_yaw = 10.0, 10.0, np.pi/4
+    
+    # Run simulation
+    traj_x, traj_y = simulate_vehicle_control(
+        start_x=start_x,
+        start_y=start_y,
+        start_yaw=start_yaw,
+        goal_x=goal_x,
+        goal_y=goal_y,
+        goal_yaw=goal_yaw,
+        max_time=30.0
+    )
+    
+    # Create animation of the vehicle motion
+    create_animation(traj_x, traj_y)
+
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+##################################################################################################################################
+
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+
+def generate_ackermann_waypoints(start_x, start_y, start_yaw, 
+                                goal_x, goal_y, goal_yaw, 
+                                wheelbase=1.0, dt=0.1, max_steering_angle=np.deg2rad(30),
+                                velocity=1.0):
+    """
+    Generate waypoints for an Ackermann vehicle from start to goal position/orientation
+    
+    Args:
+        start_x, start_y: Initial position
+        start_yaw: Initial orientation (radians)
+        goal_x, goal_y: Goal position
+        goal_yaw: Goal orientation (radians)
+        wheelbase: Vehicle wheelbase (distance between front and rear axles)
+        dt: Time step for simulation
+        max_steering_angle: Maximum steering angle in radians
+        velocity: Constant velocity for path generation
+        
+    Returns:
+        waypoints: List of (x, y, yaw) tuples representing the vehicle path
+    """
+    # Initialize current state
+    x, y, yaw = start_x, start_y, start_yaw
+    
+    # Parameters for controller
+    k_p = 1.0  # Proportional gain for steering
+    lookahead_distance = 1.5  # Pure pursuit lookahead distance
+    
+    # Thresholds for goal reaching
+    pos_threshold = 0.2  # Distance to goal threshold
+    yaw_threshold = np.deg2rad(5)  # Orientation threshold
+    
+    # For storing waypoints
+    waypoints = [(x, y, yaw)]
+    
+    # Maximum simulation time (prevent infinite loops)
+    max_time = 30.0  # seconds
+    t = 0.0
+    
+    while t < max_time:
+        # Calculate distance to goal
+        distance_to_goal = np.sqrt((goal_x - x)**2 + (goal_y - y)**2)
+        
+        # Check if we've reached the goal position
+        if distance_to_goal < pos_threshold:
+            # Align with goal orientation
+            yaw_error = normalize_angle(goal_yaw - yaw)
+            
+            # Check if we've reached the goal orientation
+            if abs(yaw_error) < yaw_threshold:
+                break  # Goal reached!
+            
+            # Compute steering angle for orientation alignment
+            steering_angle = np.clip(k_p * yaw_error, -max_steering_angle, max_steering_angle)
+            
+            # Use a lower velocity for fine orientation control
+            current_velocity = min(velocity, 0.5)
+        else:
+            # Use pure pursuit for goal seeking
+            # Calculate angle to goal
+            angle_to_goal = math.atan2(goal_y - y, goal_x - x)
+            
+            # Calculate heading error
+            alpha = normalize_angle(angle_to_goal - yaw)
+            
+            # Compute steering angle using pure pursuit
+            ld = min(lookahead_distance, distance_to_goal)
+            steering_angle = math.atan2(2.0 * wheelbase * math.sin(alpha), ld)
+            steering_angle = np.clip(steering_angle, -max_steering_angle, max_steering_angle)
+            
+            # Use normal velocity
+            current_velocity = velocity
+        
+        # Update state using bicycle model kinematics
+        x += current_velocity * np.cos(yaw) * dt
+        y += current_velocity * np.sin(yaw) * dt
+        yaw += current_velocity * np.tan(steering_angle) / wheelbase * dt
+        yaw = normalize_angle(yaw)
+        
+        # Store waypoint
+        waypoints.append((x, y, yaw))
+        
+        # Update time
+        t += dt
+    
+    return waypoints
+
+def normalize_angle(angle):
+    """Normalize angle to be between -pi and pi"""
+    while angle > np.pi:
+        angle -= 2.0 * np.pi
+    while angle < -np.pi:
+        angle += 2.0 * np.pi
+    return angle
+
+def plot_waypoints(waypoints, start, goal):
+    """Plot the waypoints with start and goal positions"""
+    x_values = [p[0] for p in waypoints]
+    y_values = [p[1] for p in waypoints]
+    
+    plt.figure(figsize=(10, 8))
+    plt.plot(x_values, y_values, 'b-', linewidth=2)
+    plt.plot(start[0], start[1], 'go', markersize=10, label='Start')
+    plt.plot(goal[0], goal[1], 'ro', markersize=10, label='Goal')
+    
+    # Draw start and goal orientations
+    arrow_length = 1.0
+    plt.arrow(start[0], start[1], 
+              arrow_length * np.cos(start[2]), arrow_length * np.sin(start[2]),
+              head_width=0.2, head_length=0.3, fc='g', ec='g')
+    plt.arrow(goal[0], goal[1], 
+              arrow_length * np.cos(goal[2]), arrow_length * np.sin(goal[2]),
+              head_width=0.2, head_length=0.3, fc='r', ec='r')
+    
+    plt.grid(True)
+    plt.axis('equal')
+    plt.xlabel('X [m]')
+    plt.ylabel('Y [m]')
+    plt.title('Ackermann Vehicle Waypoints')
+    plt.legend()
+    plt.show()
+
+if __name__ == "__main__":
+    # Define start and goal states: (x, y, yaw)
+    start = (0.0, 0.0, 0.0)  # Start at origin facing east
+    goal = (10.0, 10.0, np.pi/4)  # Goal at (10,10) facing northeast
+    
+    # Generate waypoints
+    waypoints = generate_ackermann_waypoints(
+        start_x=start[0], start_y=start[1], start_yaw=start[2],
+        goal_x=goal[0], goal_y=goal[1], goal_yaw=goal[2],
+        velocity=1.0  # 1 m/s constant velocity
+    )
+    
+    # Output waypoints
+    print(f"Generated {len(waypoints)} waypoints")
+    print("First few waypoints (x, y, yaw):")
+    for i, wp in enumerate(waypoints[:5]):
+        print(f"{i}: ({wp[0]:.3f}, {wp[1]:.3f}, {np.rad2deg(wp[2]):.1f}°)")
+    print("...")
+    for i, wp in enumerate(waypoints[-5:]):
+        print(f"{len(waypoints)-5+i}: ({wp[0]:.3f}, {wp[1]:.3f}, {np.rad2deg(wp[2]):.1f}°)")
+    
+    # Plot waypoints
+    plot_waypoints(waypoints, start, goal)
+
+
+
+##################################################################################################################################

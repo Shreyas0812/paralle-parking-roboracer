@@ -17,7 +17,7 @@ class RecodManualWPNode(Node):
 
         self.declare_parameter('goal_pose_topic', '/goal_pose')
         self.declare_parameter('visualize_wp_topic', '/visualization/waypoints')
-        self.declare_parameter('waypoint_file_path', '/home/shreyas/Documents/ESE6150_F1_Tenth/paralle-parking-roboracer/src/parallel_parking/config/waypoints_manual.csv')
+        self.declare_parameter('waypoint_file_path', '/home/shreyas/Documents/ESE6150_F1_Tenth/parallel-parking-roboracer/src/parallel_parking/config/waypoints_manual.csv')
 
         goal_pose_topic = self.get_parameter('goal_pose_topic').get_parameter_value().string_value
         visualize_wp_topic = self.get_parameter('visualize_wp_topic').get_parameter_value().string_value

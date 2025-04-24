@@ -3,7 +3,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
-    waypoint_file_name = "waypoints_levine.csv"
+    waypoint_file_name = "waypoints_park1.csv"
     
     scan_topic = "/scan"
     pose_topic = "/ego_racecar/odom"
@@ -12,7 +12,7 @@ def generate_launch_description():
     original_map_topic = "/map"
     occupancy_grid_topic = "/occupancy_grid"
     
-    lookahead_distance = 0.8
+    lookahead_distance = 0.1
     y_ego_threshold = 1.2
     
     map_height = 713
@@ -71,6 +71,26 @@ def generate_launch_description():
                 {"next_wp_topic": next_wp_topic},
                 {"lookahead_distance": lookahead_distance},
                 {"y_ego_threshold": y_ego_threshold}
+            ]
+        ),
+        # MPC node
+        Node(
+            package="parallel_parking",
+            executable="mpc_node.py",
+            name="mpc_node",
+            output="screen",
+            parameters=[
+                {"pose_topic": pose_topic}
+            ]
+        ),
+        # MPPI node
+        Node(
+            package="parallel_parking",
+            executable="mppi_node.py",
+            name="mppi_node",
+            output="screen",
+            parameters=[
+                {"pose_topic": pose_topic}
             ]
         ),
     ])
