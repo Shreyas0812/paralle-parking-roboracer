@@ -188,6 +188,7 @@ def generateAckermannWaypoints(
         dist_to_goal = np.sqrt((goal_x - x) ** 2 + (goal_y - y) ** 2)
 
         if dist_to_goal < pos_threshold:
+            break
             yaw_error = normalize_angle(goal_yaw - yaw)
             if abs(yaw_error) < yaw_threshold:
                 break # Reached goal
