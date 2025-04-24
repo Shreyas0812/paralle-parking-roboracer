@@ -2,19 +2,13 @@
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
+from rclpy.qos import QoSProfile
 
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from nav_msgs.msg import Odometry
 
+from geometry_msgs.msg import Pose, Quaternion, Point
 
-from nav_msgs.msg import OccupancyGrid, Odometry, Path
-from geometry_msgs.msg import PoseStamped
-
-from visualization_msgs.msg import Marker, MarkerArray
-from std_msgs.msg import Header, ColorRGBA
-from geometry_msgs.msg import Pose, Quaternion, Vector3, Point
-
-
+from parallel_parking_interfaces.msg import Traj
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -54,7 +48,7 @@ class MPCNode(Node):
         qos_profile = QoSProfile(depth=10)
 
         # Publishers
-        self.extrapolated_path_publisher_ = self.create_publisher(Path, extrapolated_path_topic, qos_profile)
+        self.extrapolated_path_publisher_ = self.create_publisher(Traj, extrapolated_path_topic, qos_profile)
 
     def pose_callback(self, msg):
         pos_x = msg.pose.pose.position.x
@@ -76,32 +70,32 @@ class MPCNode(Node):
         self.publish_extrapolated_path(extrapolated_waypoints)
 
     def publish_extrapolated_path(self, extrapolated_waypoints):
-        path = Path()
-        path.header.frame_id = "map"
-        path.header.stamp = self.get_clock().now().to_msg()
+        path = Traj()
 
         for i, wp in enumerate(extrapolated_waypoints):
             x, y, yaw = wp
 
-            pose = PoseStamped()
-            pose.header = path.header
-            pose.pose.position = Point(x=x, y=y, z=0.0)
-            pose.pose.orientation = Quaternion()
+            pose = Pose()
+            pose.position = Point(x=x, y=y, z=0.0)
+            pose.orientation = Quaternion()
 
-            path.poses.append(pose)
+            path.traj.append(pose)
         
         for i, wp in enumerate(self.wp_rest):
             x, y, yaw, qw, qx, qy, qz = wp
 
-            pose = PoseStamped()
-            pose.header = path.header
-            pose.pose.position = Point(x=x, y=y, z=0.0)
-            pose.pose.orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
+            pose = Pose()
+            pose.position = Point(x=x, y=y, z=0.0)
+            pose.orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
             
-            path.poses.append(pose)
+            path.traj.append(pose)
+
+            if i == len(self.wp_rest) - 1:
+                path.end_pose = pose
+            
 
         self.extrapolated_path_publisher_.publish(path)
-        self.get_logger().info("Extrapolated Path Published", once=True)
+        # self.get_logger().info("Extrapolated Path Published")
 
 def main(args=None):
     rclpy.init(args=args)

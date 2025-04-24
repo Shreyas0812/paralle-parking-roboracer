@@ -11,6 +11,8 @@ from geometry_msgs.msg import Pose, Quaternion, Vector3, Point
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import Header, ColorRGBA
 
+from parallel_parking_interfaces.msg import Traj
+
 from transforms3d.euler import quat2euler
 
 import csv
@@ -49,7 +51,7 @@ class VisualizeNode(Node):
         )   
 
         # Subscribers
-        self.extrapolated_path_subscriber_ = self.create_subscription(Path, extrapolated_path_topic, self.visualize_extrapolated_path, qos_profile)
+        self.extrapolated_path_subscriber_ = self.create_subscription(Traj, extrapolated_path_topic, self.visualize_extrapolated_path, qos_profile)
 
         # Publishers
         self.waypoint_marker_publisher_ = self.create_publisher(MarkerArray, visualize_wp_topic, qos_profile)
@@ -103,10 +105,10 @@ class VisualizeNode(Node):
         marker.scale = Vector3(x=0.1, y=0.0, z=0.0)
         marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=1.0)
 
-        for i, pose in enumerate(msg.poses):
+        for i, pose in enumerate(msg.traj):
             p = Point()
-            p.x = pose.pose.position.x
-            p.y = pose.pose.position.y
+            p.x = pose.position.x
+            p.y = pose.position.y
             p.z = 0.1
             marker.points.append(p)
         
@@ -122,10 +124,10 @@ class VisualizeNode(Node):
 
 
 
-        if len(msg.poses) > 0:
+        if len(msg.traj) > 0:
 
-            p1 = msg.poses[-2].pose.position
-            p2 = msg.poses[-1].pose.position
+            p1 = msg.traj[-2].position
+            p2 = msg.traj[-1].position
 
             arrow_marker.pose.position.x = p2.x
             arrow_marker.pose.position.y = p2.y
@@ -140,7 +142,7 @@ class VisualizeNode(Node):
 
         marker_array = MarkerArray()
         marker_array.markers.append(marker)
-        if len(msg.poses) > 2:
+        if len(msg.traj) > 2:
             marker_array.markers.append(arrow_marker)
         
         self.extrapolated_path_marker_publisher_.publish(marker_array)
