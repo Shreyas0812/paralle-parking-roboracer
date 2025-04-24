@@ -36,15 +36,17 @@ class MPPI_Node(Node):
         super().__init__('lmppi_node')
         self.config = utils.ConfigYAML()
         config_dir = get_package_share_directory('mppi')
-        config_path = os.path.join(config_dir, 'config.yaml')
+        config_path = os.path.join(config_dir, 'config_map_edited.yaml')
         self.config.load_file(config_path)
         self.config.norm_params = np.array(self.config.norm_params).T
         if self.config.random_seed is None:
             self.config.random_seed = np.random.randint(0, 1e6)
         jrng = jax_utils.oneLineJaxRNG(self.config.random_seed)    
         map_dir = os.path.join(config_dir, 'waypoints/')
-        map_info = np.genfromtxt(map_dir + 'map_info.txt', delimiter='|', dtype='str')
-        track, self.config = Track.load_map(map_dir, map_info, self.config.map_ind, self.config)
+        # map_info = np.genfromtxt(map_dir + 'map_info.txt', delimiter='|', dtype='str')]
+        map_info = None
+        map_ind = self.config.map_ind if hasattr(self.config, 'map_ind') else None
+        track, self.config = Track.load_map(map_dir, map_info, map_ind, self.config)
         # track.waypoints[:, 3] += 0.5 * np.pi
         self.infer_env = InferEnv(track, self.config, DT=self.config.sim_time_step)
         self.mppi = MPPI(self.config, self.infer_env, jrng)
@@ -75,6 +77,8 @@ class MPPI_Node(Node):
         self.opt_traj_pub = self.create_publisher(Float32MultiArray, "/opt_traj_arr", qos)
         
         self.obstacle_marker_pub = self.create_publisher(Marker, "/obstacle_points_marker", 10)
+        self.point_marker_pub = self.create_publisher(Marker, "/point_marker", 10)
+        self.point_marker_pub_rev = self.create_publisher(Marker, "/point_marker_rev", 10)
 
         # map info
         self.map_received = False
@@ -83,7 +87,6 @@ class MPPI_Node(Node):
         self.resolution = None
         self.origin = None
         self.occup_pos = None
-
 
     # @TODO: add a callback for the laser scan data and get the scan data from obstacles to add the cost to the MPPI
     def grid_callback(self, grid_msg):
@@ -202,6 +205,40 @@ class MPPI_Node(Node):
         i = int((y - origin.y) / resolution)
         j = int((x - origin.x) / resolution)
         return i, j
+    
+    def publish_point_marker(self, x, y, rev=False):
+        marker = Marker()
+        marker.header.frame_id = "map"
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.ns = "point_marker"
+        marker.id = 0
+        marker.type = Marker.SPHERE
+        marker.action = Marker.ADD
+
+        # Visual appearance
+        marker.scale.x = 0.1
+        marker.scale.y = 0.1
+        marker.scale.z = 0.1
+        marker.color.a = 1.0
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        # Set the position of the point
+        marker.pose.position.x = x
+        marker.pose.position.y = y
+        marker.pose.position.z = 0.0
+        marker.pose.orientation.x = 0.0
+        marker.pose.orientation.y = 0.0
+        marker.pose.orientation.z = 0.0
+        marker.pose.orientation.w = 1.0
+        if rev:
+            marker.id = 1
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+            self.point_marker_pub_rev.publish(marker)
+        else:
+            self.point_marker_pub.publish(marker)
 
     def pose_callback(self, pose_msg):
         """
@@ -243,13 +280,21 @@ class MPPI_Node(Node):
         filtered_obstacles = self.filtering_roi_obstacles(state_c_0, self.occup_pos)
         self.publish_obstacle_points(filtered_obstacles)
         
-        find_waypoint_vel = max(self.config.ref_vel, twist.linear.x)
+        find_waypoint_vel = min(self.config.ref_vel, twist.linear.x)
         reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), find_waypoint_vel, self.config.n_steps)
-
+        # print(f"waypoint_ind: {waypoint_ind}")
+        # print(f"p: {p}")
+        # self.publish_point_marker(p[0], p[1])
+        # print(f"ind_rev: {ind_rev}")
+        # print(f"p_rev: {p_rev}")
+        # self.publish_point_marker(p_rev[0], p_rev[1], rev=True)
+        # exit()
+        # reference_traj = np.zeros((self.config.n_steps, 2))
         ## MPPI call
         self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj), jnp.asarray(filtered_obstacles))
         # self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
         mppi_control = numpify(self.mppi.a_opt[0]) * self.config.norm_params[0, :2]/2
+        # print(f"mppi_control: {mppi_control}")
         self.control[0] = float(mppi_control[0]) * self.config.sim_time_step + self.control[0]
         self.control[1] = float(mppi_control[1]) * self.config.sim_time_step + twist.linear.x
         
@@ -263,8 +308,8 @@ class MPPI_Node(Node):
             arr_msg = to_multiarray_f32(opt_traj_cpu.astype(np.float32))
             self.opt_traj_pub.publish(arr_msg)
 
-        if twist.linear.x < self.config.init_vel:
-            self.control = [0.0, self.config.init_vel * 2]
+        # if twist.linear.x < self.config.init_vel:
+        #     self.control = [0.0, self.config.init_vel * 2]
 
         if np.isnan(self.control).any() or np.isinf(self.control).any():
             self.control = np.array([0.0, 0.0])

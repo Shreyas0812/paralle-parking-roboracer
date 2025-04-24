@@ -176,7 +176,7 @@ class InferEnv():
             reference (numpy.ndarray): reference trajectory
             ind (int): index of the closest waypoint to start the reference trajectory
         '''
-        _, dist, _, _, ind = nearest_point(np.array([state[0], state[1]]), 
+        p, dist, _, _, ind = nearest_point(np.array([state[0], state[1]]), 
                                            self.waypoints[:, (1, 2)].copy())
         
         if target_speed is None:
@@ -192,9 +192,12 @@ class InferEnv():
         speeds = np.ones(n_steps) * speed
         # print('speed:', speed)
         # reference speed, closest pts dist and ind to current position
-        reference = get_reference_trajectory(speeds, dist, ind, 
-                                            self.waypoints.copy(), int(n_steps),
-                                            self.waypoints_distances.copy(), DT=self.DT)
+        # reference = get_reference_trajectory(speeds, dist, ind, 
+        #                                     self.waypoints.copy(), int(n_steps),
+        #                                     self.waypoints_distances.copy(), DT=self.DT)
+        reference  = get_reference_trajectory_backward(speeds, dist, ind,
+                                                    self.waypoints.copy(), int(n_steps),
+                                                    self.waypoints_distances.copy(), DT=self.DT)
         orientation = state[4]
         # we care about diff between the reference and the current state so calibrate using the diff that is too far apart
         reference[3, :][reference[3, :] - orientation > 5] = np.abs(
@@ -204,6 +207,7 @@ class InferEnv():
         
         # reference[2] = np.where(reference[2] - speed > 5.0, speed + 5.0, reference[2])
         self.reference = reference.T
+        # print('reference:', reference)
         return reference.T, ind
 
     
@@ -338,6 +342,73 @@ def get_reference_trajectory(predicted_speeds, dist_from_segment_start, idx,
     interpolated_orientations = (interpolated_orientations + np.pi) % (2 * np.pi) - np.pi
     interpolated_speeds = waypoints[index_absolute][:, 5] + (t * speed_diffs)
     # print('interpolated_speeds:', interpolated_speeds)
+    
+    reference = np.array([
+        # Sort reference trajectory so the order of reference match the order of the states
+        interpolated_positions[:, 0],
+        interpolated_positions[:, 1],
+        interpolated_speeds,
+        interpolated_orientations,
+        # Fill zeros to the rest so number of references mathc number of states (x[k] - ref[k])
+        interpolated_s,
+        np.zeros(len(interpolated_speeds)),
+        np.zeros(len(interpolated_speeds))
+    ])
+    return reference
+
+#@ TODO: modify this function to make a backward reference trajectory
+# @njit(cache=True)
+def get_reference_trajectory_backward(predicted_speeds,
+                                      dist_from_segment_start,
+                                      idx,
+                                      waypoints,
+                                      n_steps,
+                                      waypoints_distances,
+                                      DT):
+    """
+    Supports both forward and reverse predicted_speeds.
+    Returns reference = [x, y, v_ref, yaw_ref, s_abs, 0, 0] shape (7, n_steps+1).
+    """
+    # assert predicted_speeds <= 0
+    # build signed arc-length increments
+    delta_s = np.ones((n_steps ,)) * predicted_speeds * DT
+    s_relative = np.cumsum(np.concatenate(([0.0], delta_s)))
+    # np.roll(..., -idx) shifts the array left so that the segment starting at your "idx" becomes the start
+    # waypoints_distances_relative is cumulative distance from the start of the "idx"
+    N = waypoints.shape[0] - 1
+    seg_inds = np.mod((idx - 1 - np.arange(N)), N)
+    # 2) pick out those distances in that order
+    d_rev = waypoints_distances[seg_inds]      # shape (N,)
+    # 3) cumulative sum and negate
+    waypoints_distances_relative = -np.cumsum(d_rev)  
+    # how much indices to travel using s_relative starting from "idx"
+    # now s_relative is negative
+    index_relative = np.int_(np.ones((n_steps + 1,)))
+    for i in range(n_steps + 1):
+        index_relative[i] = (-waypoints_distances_relative <= (-s_relative[i])).sum()
+    index_absolute = np.mod(idx - index_relative, waypoints.shape[0] - 1)
+    # waypoints_distances_relative[index_relative] - waypoints_distances[index_absolute] is the distance to the start of the segment
+    # This expression gives the cumulative distance from the current position to the start of the segment you're currently in at each timestep.
+    segment_part = s_relative - (
+            waypoints_distances_relative[index_relative] + waypoints_distances[index_absolute])
+
+    t = (segment_part / -waypoints_distances[index_absolute])
+
+    position_diffs = (waypoints[np.mod(index_absolute - 1, waypoints.shape[0] - 1)][:, (1, 2)] -
+                        waypoints[index_absolute][:, (1, 2)])
+    position_diff_s = (waypoints[np.mod(index_absolute - 1, waypoints.shape[0] - 1)][:, 0] -
+                        waypoints[index_absolute][:, 0])
+    orientation_diffs = (waypoints[np.mod(index_absolute - 1, waypoints.shape[0] - 1)][:, 3] -
+                            waypoints[index_absolute][:, 3])
+    speed_diffs = (waypoints[np.mod(index_absolute - 1, waypoints.shape[0] - 1)][:, 5] -
+                    waypoints[index_absolute][:, 5])
+
+    interpolated_positions = waypoints[index_absolute][:, (1, 2)] + (t * position_diffs.T).T
+    interpolated_s = waypoints[index_absolute][:, 0] + (t * position_diff_s)
+    interpolated_s[np.where(interpolated_s > waypoints[-1, 0])] -= waypoints[-1, 0]
+    interpolated_orientations = waypoints[index_absolute][:, 3] + (t * orientation_diffs)
+    interpolated_orientations = (interpolated_orientations + np.pi) % (2 * np.pi) - np.pi
+    interpolated_speeds = waypoints[index_absolute][:, 5] + (t * speed_diffs)
     
     reference = np.array([
         # Sort reference trajectory so the order of reference match the order of the states

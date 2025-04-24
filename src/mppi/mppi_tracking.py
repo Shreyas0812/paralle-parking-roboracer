@@ -29,7 +29,6 @@ class MPPI():
         self.accum_matrix = jnp.triu(jnp.ones((self.n_steps, self.n_steps))) # [n_steps, n_steps] upper triangular matrix of ones
         self.track = track
 
-
     def init_state(self, env, a_shape):
         # uses random as a hack to support vmap
         # we should find a non-hack approach to initializing the state
@@ -85,6 +84,7 @@ class MPPI():
         )  # [n_samples, n_steps, dim_a]
 
         actions = jnp.clip(jnp.expand_dims(a_opt, axis=0) + da, -1.0, 1.0)
+        # jax.debug.print("actions : {}", actions)
         states = jax.vmap(self.rollout, in_axes=(0, None, None))(
             actions, env_state, rng_da_split1
         )

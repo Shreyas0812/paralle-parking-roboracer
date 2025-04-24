@@ -61,8 +61,8 @@ class Track:
         self.filepath = filepath
         self.waypoints = waypoints
         self.s_frame_max = s_frame_max
-
-        assert xs.shape == ys.shape == velxs.shape, "inconsistent shapes for x, y, vel"
+        
+        # assert xs.shape == ys.shape == velxs.shape, "inconsistent shapes for x, y, vel"
 
         self.n = xs.shape[0]
         self.ss = ss
@@ -83,11 +83,11 @@ class Track:
         self.len_s = len(self.centerline.s)
         self.raceline = raceline or CubicSplineND(xs, ys, psis, kappas, velxs, accxs, ss)
         self.s_guess = 0.0
-        self.tr_rights_jax = jnp.array(tr_rights)
-        self.tr_lefts_jax = jnp.array(tr_lefts)
+        self.tr_rights_jax = jnp.array(self.tr_rights)
+        self.tr_lefts_jax = jnp.array(self.tr_lefts)
 
     @staticmethod
-    def from_numpy(waypoints: np.ndarray, s_frame_max, downsample_step = 1) -> Track:
+    def from_numpy(waypoints: np.ndarray, config, s_frame_max, downsample_step = 1) -> Track:
         """
         Create an empty track reference line.
 
@@ -105,17 +105,40 @@ class Track:
         track: Track
             track object
         """
-        assert (
-            waypoints.shape[1] >= 7
-        ), "expected waypoints as [s, x, y, psi, k, vx, ax]"
+        # assert (
+        #     waypoints.shape[1] >= 7
+        # ), "expected waypoints as [s, x, y, psi, k, vx, ax]"
+        print(hasattr(config, 'wpt_xind'), hasattr(config, 'wpt_yind'), hasattr(config, 'wpt_sind'))
+        wpt_sind = config.wpt_sind if hasattr(config, 'wpt_sind') else None
+        wpt_xind = config.wpt_xind if hasattr(config, 'wpt_xind') else None
+        wpt_yind = config.wpt_yind if hasattr(config, 'wpt_yind') else None
+        wpt_yawind = config.wpt_yawind if hasattr(config, 'wpt_yawind') else None
+        wpt_ksind = config.wpt_ksind if hasattr(config, 'wpt_ksind') else None
+        wpt_vxind = config.wpt_vxind if hasattr(config, 'wpt_vxind') else None
+        wpt_axind = config.wpt_axind if hasattr(config, 'wpt_axind') else None
+
+        ss=waypoints[::downsample_step, wpt_sind] if wpt_sind is not None else None
+        xs=waypoints[::downsample_step, wpt_xind] if wpt_xind is not None else None
+        ys=waypoints[::downsample_step, wpt_yind] if wpt_yind is not None else None
+        yaws=waypoints[::downsample_step, wpt_yawind] if wpt_yawind is not None else None
+        ks=waypoints[::downsample_step, wpt_ksind] if wpt_ksind is not None else None # curvature
+        vxs=waypoints[::downsample_step, wpt_vxind] if wpt_vxind is not None else None # velocity
+        axs=waypoints[::downsample_step, wpt_axind] if wpt_axind is not None else None
         
-        ss=waypoints[::downsample_step, 0]
-        xs=waypoints[::downsample_step, 1]
-        ys=waypoints[::downsample_step, 2]
-        yaws=waypoints[::downsample_step, 3]
-        ks=waypoints[::downsample_step, 4] # curvature
-        vxs=waypoints[::downsample_step, 5] # velocity
-        axs=waypoints[::downsample_step, 6] # acceleration
+        assert (
+            xs is not None and ys is not None
+            ), "expected waypoints at least [x, y]"
+        # reconstruct waypoints for the format
+        # [s, x, y, psi, kappa, vx, ax]
+        if ss is None or yaws is None or ks is None or vxs is None or axs is None:
+            waypoints = np.zeros((len(xs), 7))
+            waypoints[:, 0] = ss if ss is not None else np.zeros(waypoints.shape[0])[::downsample_step]
+            waypoints[:, 1] = xs if xs is not None else np.zeros(waypoints.shape[0])[::downsample_step]
+            waypoints[:, 2] = ys if ys is not None else np.zeros(waypoints.shape[0])[::downsample_step]
+            waypoints[:, 3] = yaws if yaws is not None else np.zeros(waypoints.shape[0])[::downsample_step]
+            waypoints[:, 4] = ks if ks is not None else np.zeros(waypoints.shape[0])[::downsample_step]
+            waypoints[:, 5] = vxs if vxs is not None else np.zeros(waypoints.shape[0])[::downsample_step]
+            waypoints[:, 6] = axs if axs is not None else np.zeros(waypoints.shape[0])[::downsample_step]
         
         tr_lefts = None
         tr_rights = None
@@ -491,14 +514,15 @@ class Track:
         """
         loads waypoints
         """
-        map_info = map_info[map_ind][1:]
-        config.wpt_path = str(map_info[0])
-        config.wpt_delim = str(map_info[1])
-        config.wpt_rowskip = int(map_info[2])
-        config.wpt_xind = int(map_info[3])
-        config.wpt_yind = int(map_info[4])
-        config.wpt_thind = int(map_info[5])
-        config.wpt_vind = int(map_info[6])
+        if map_info is not None and map_ind is not None:
+            map_info = map_info[map_ind][1:]
+            config.wpt_path = str(map_info[0])
+            config.wpt_delim = str(map_info[1])
+            config.wpt_rowskip = int(map_info[2])
+            config.wpt_xind = int(map_info[3])
+            config.wpt_yind = int(map_info[4])
+            config.wpt_thind = int(map_info[5])
+            config.wpt_vind = int(map_info[6])
         config.s_frame_max = -1
         
         waypoints = np.loadtxt(MAP_DIR + config.wpt_path, delimiter=config.wpt_delim, skiprows=config.wpt_rowskip)
@@ -510,7 +534,7 @@ class Track:
             config.s_frame_max = waypoints[-1, 0]
         
         # NOTE: initialized states for forward
-        if config.wpt_thind == -1:
+        if hasattr(config, 'wpt_thind') and config.wpt_thind == -1:
             print('Convert to raceline format.')
             waypoints = Track.centerline_to_frenet(waypoints, velocity=5.0)
             # np.save('waypoints.npy', waypoints)
@@ -519,7 +543,7 @@ class Track:
             config.wpt_thind = 3
             config.wpt_vind = 5
         else:
-            track = Track.from_numpy(waypoints, config.s_frame_max, downsample_step)
+            track = Track.from_numpy(waypoints, config, config.s_frame_max, downsample_step)
             track.waypoints_distances = np.linalg.norm(track.waypoints[1:, (1, 2)] - track.waypoints[:-1, (1, 2)], axis=1)
         
         return track, config
