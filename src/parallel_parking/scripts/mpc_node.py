@@ -33,18 +33,11 @@ class MPCNode(Node):
         self.declare_parameter("pose_topic", '/ego_racecar/odom')
         self.declare_parameter('extrapolated_path_topic', '/extrapolated_path')
 
-        # REMOVE
-        self.declare_parameter('visualize_wp_topic', '/visualization/extrapolated_waypoints')
-
-
         package_share_dir = get_package_share_directory("parallel_parking")
 
         waypoint_file_name = self.get_parameter("waypoint_file_name").get_parameter_value().string_value
         extrapolated_path_topic = self.get_parameter('extrapolated_path_topic').get_parameter_value().string_value
-        
-        # REMOVE
-        visualize_wp_topic = self.get_parameter('visualize_wp_topic').get_parameter_value().string_value
-        
+         
         waypoint_file_path = os.path.join(package_share_dir, 'config', waypoint_file_name)
         waypoints = np.array(load_waypoints(waypoint_file_path))
 
@@ -57,16 +50,6 @@ class MPCNode(Node):
         pose_topic = self.get_parameter("pose_topic").get_parameter_value().string_value
 
         self.pose_sub_ = self.create_subscription(Odometry, pose_topic, self.pose_callback, qos_pos)
-
-
-        # REMOVE
-        qos_profile = QoSProfile(
-            reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.VOLATILE,
-            depth=10
-        )   
-
-        self.waypoint_marker_publisher_ = self.create_publisher(MarkerArray, visualize_wp_topic, qos_profile)
 
         qos_profile = QoSProfile(depth=10)
 
@@ -91,9 +74,6 @@ class MPCNode(Node):
         # self.get_logger().info(f"Waypoints: {extrapolated_waypoints}", throttle_duration_sec=1.0)
 
         self.publish_extrapolated_path(extrapolated_waypoints)
-
-        # REMOVE
-        self.visualize_waypoints(extrapolated_waypoints)
 
     def publish_extrapolated_path(self, extrapolated_waypoints):
         path = Path()
@@ -121,37 +101,7 @@ class MPCNode(Node):
             path.poses.append(pose)
 
         self.extrapolated_path_publisher_.publish(path)
-        self.get_logger().info("Extrapolated Path Published")
-
-    # REMOVE
-    def visualize_waypoints(self, extrapolated_waypoints):
-        marker_array = MarkerArray()
-        for i, wp in enumerate(extrapolated_waypoints):
-            x, y, yaw, *others = wp
-
-            marker = Marker()
-            marker.header = Header()
-            marker.header.frame_id = "map"
-            marker.header.stamp = self.get_clock().now().to_msg()
-            marker.id = i
-            marker.type = Marker.SPHERE
-            marker.action = Marker.ADD
-            
-            marker.pose = Pose()
-            marker.pose.position = Point(x=x, y=y, z=0.0)
-            marker.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
-
-            marker.scale = Vector3(x=0.1, y=0.1, z=0.1)
-            marker.color = ColorRGBA(r=1.0, g=1.0, b=0.0, a=0.9)
-
-            marker.lifetime.sec = 0
-
-            marker_array.markers.append(marker)
-
-        self.waypoint_marker_publisher_.publish(marker_array)
-        # self.get_logger().info("Waypoints Visualized")
-
-
+        self.get_logger().info("Extrapolated Path Published", once=True)
 
 def main(args=None):
     rclpy.init(args=args)
