@@ -16,6 +16,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros)
+find_package(parallel_parking_interfaces REQUIRED)
 
 # CPP
 include_directories(include)
@@ -40,6 +41,7 @@ install(PROGRAMS
   scripts/next_waypoint_node.py
   scripts/record_manual_wp_node.py
   scripts/mpc_node.py
+  scripts/mppi_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

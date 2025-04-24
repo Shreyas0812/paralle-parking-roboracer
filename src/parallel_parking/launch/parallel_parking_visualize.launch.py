@@ -83,4 +83,14 @@ def generate_launch_description():
                 {"pose_topic": pose_topic}
             ]
         ),
+        # MPPI node
+        Node(
+            package="parallel_parking",
+            executable="mppi_node.py",
+            name="mppi_node",
+            output="screen",
+            parameters=[
+                {"pose_topic": pose_topic}
+            ]
+        ),
     ])
