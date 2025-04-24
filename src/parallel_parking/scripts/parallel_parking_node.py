@@ -91,7 +91,7 @@ class ParallelParkingNode(Node):
             self.get_logger().error("Next waypoint not received yet.", throttle_duration_sec=1.0)
             return
         
-        self.get_logger().info("\n\nREADY...\n\n", once=True)
+        self.get_logger().info("\n\n\nParallel Parking Node Ready\n\n\n", once=True)
 
         
 
