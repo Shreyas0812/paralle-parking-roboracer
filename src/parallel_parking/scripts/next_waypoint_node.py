@@ -67,6 +67,8 @@ class NextWaypoint(Node):
 
         # TODO: We can use some other parameters to determine the next waypoint as well, such as check the current velocity of the car, if positive something, if -ve something else, etc.
 
+        # TODO: Use server client architecture for verfication of the next waypoint
+
         # 2 point parking
         wp1_index = 0
         wp1 = self.waypoints[wp1_index] # 1st point -- Right beside the car in front
