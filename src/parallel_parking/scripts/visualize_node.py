@@ -110,6 +110,8 @@ class VisualizeNode(Node):
             p.z = 0.1
             marker.points.append(p)
         
+        marker.lifetime.sec = 1
+
         arrow_marker = Marker()
         arrow_marker.header = marker.header
         arrow_marker.id = 4201
@@ -117,6 +119,8 @@ class VisualizeNode(Node):
         arrow_marker.action = Marker.ADD
         arrow_marker.scale = Vector3(x=0.3, y=0.15, z=0.1)
         arrow_marker.color = ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0)
+
+
 
         if len(msg.poses) > 0:
 
