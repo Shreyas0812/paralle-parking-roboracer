@@ -18,19 +18,29 @@ from transforms3d.euler import quat2euler
 
 from parallel_parking.utils import load_waypoints, generateAckermannWaypoints
 
-class MPCNode(Node):
+class TrajGen(Node):
     def __init__(self):
-        super().__init__("mpc_node")
-        self.get_logger().info("Python mpc_node has been started.")
+        super().__init__("traj_gen_node")
+        self.get_logger().info("Python traj_gen_node has been started.")
 
         self.declare_parameter('waypoint_file_name', 'waypoints_park1.csv')
         self.declare_parameter("pose_topic", '/ego_racecar/odom')
         self.declare_parameter('extrapolated_path_topic', '/extrapolated_path')
+        self.declare_parameter('wp1_dist_thresh', 0.5)
+        self.declare_parameter('wp2_dist_thresh', 0.5)
+        self.declare_parameter('wp1_angle_thresh', 0.1)
+        self.declare_parameter('wp2_angle_thresh', 0.1)
+        self.declare_parameter('switch_wp_index', 1)
 
         package_share_dir = get_package_share_directory("parallel_parking")
 
         waypoint_file_name = self.get_parameter("waypoint_file_name").get_parameter_value().string_value
         extrapolated_path_topic = self.get_parameter('extrapolated_path_topic').get_parameter_value().string_value
+        self.wp1_dist_thresh = self.get_parameter('wp1_dist_thresh').get_parameter_value().double_value
+        self.wp2_dist_thresh = self.get_parameter('wp2_dist_thresh').get_parameter_value().double_value
+        self.wp1_angle_thresh = self.get_parameter('wp1_angle_thresh').get_parameter_value().double_value
+        self.wp2_angle_thresh = self.get_parameter('wp2_angle_thresh').get_parameter_value().double_value
+        self.switch_wp_index = self.get_parameter('switch_wp_index').get_parameter_value().integer_value
          
         waypoint_file_path = os.path.join(package_share_dir, 'config', waypoint_file_name)
         waypoints = np.array(load_waypoints(waypoint_file_path))
@@ -50,6 +60,8 @@ class MPCNode(Node):
         # Publishers
         self.extrapolated_path_publisher_ = self.create_publisher(Traj, extrapolated_path_topic, qos_profile)
 
+        self.switched_path = False
+
     def pose_callback(self, msg):
         pos_x = msg.pose.pose.position.x
         pos_y = msg.pose.pose.position.y
@@ -63,9 +75,24 @@ class MPCNode(Node):
         euler_angles = quat2euler([qw, qx, qy, qz])
         yaw = euler_angles[2]
 
-        extrapolated_waypoints = generateAckermannWaypoints(start_x=pos_x, start_y=pos_y, start_yaw=yaw, goal_x=self.wp1[0], goal_y=self.wp1[1], goal_yaw=self.wp1[2], wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=1.0)
+        # Here we add a check if we need to go to wp1 or wp2
 
-        # self.get_logger().info(f"Waypoints: {extrapolated_waypoints}", throttle_duration_sec=1.0)
+        # dist and angle to wp1
+        check_wp_pl = self.wp_rest[self.switch_wp_index][0:2]
+
+        dist_wp1 = np.sqrt((pos_x - check_wp_pl[0])**2 + (pos_y - check_wp_pl[1])**2)
+        angle_wp1 = np.arctan2(check_wp_pl[1] - pos_y, check_wp_pl[0] - pos_x)
+
+        
+        if dist_wp1 < self.wp1_dist_thresh and abs(angle_wp1 - yaw) < self.wp1_angle_thresh:
+            self.switched_path = True
+
+            extrapolated_waypoints = generateAckermannWaypoints(start_x=pos_x, start_y=pos_y, start_yaw=yaw, goal_x=self.wp2[0], goal_y=self.wp2[1], goal_yaw=self.wp2[2], wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
+            
+        else:
+            if not self.switched_path:
+                extrapolated_waypoints = generateAckermannWaypoints(start_x=pos_x, start_y=pos_y, start_yaw=yaw, goal_x=self.wp1[0], goal_y=self.wp1[1], goal_yaw=self.wp1[2], wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=2.0)
+
 
         self.publish_extrapolated_path(extrapolated_waypoints)
 
@@ -81,17 +108,18 @@ class MPCNode(Node):
 
             path.traj.append(pose)
         
-        for i, wp in enumerate(self.wp_rest):
-            x, y, yaw, qw, qx, qy, qz = wp
+        if not self.switched_path:
+            for i, wp in enumerate(self.wp_rest):
+                x, y, yaw, qw, qx, qy, qz = wp
 
-            pose = Pose()
-            pose.position = Point(x=x, y=y, z=0.0)
-            pose.orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
-            
-            path.traj.append(pose)
+                pose = Pose()
+                pose.position = Point(x=x, y=y, z=0.0)
+                pose.orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
+                
+                path.traj.append(pose)
 
-            if i == len(self.wp_rest) - 1:
-                path.end_pose = pose
+                if i == len(self.wp_rest) - 1:
+                    path.end_pose = pose
             
 
         self.extrapolated_path_publisher_.publish(path)
@@ -99,7 +127,7 @@ class MPCNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = MPCNode()
+    node = TrajGen()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

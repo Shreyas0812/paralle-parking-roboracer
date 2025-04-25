@@ -219,3 +219,32 @@ def generateAckermannWaypoints(
         time += dt
         
     return waypoints
+
+# def getReverseAckermannWaypoints(
+#         start_x: float = 0.0,
+#         start_y: float = 0.0,
+#         start_yaw: float = 0.0,
+#         goal_x: float = 0.0,
+#         goal_y: float = 0.0,
+#         goal_yaw: float = 0.0,
+#         wheelbase: float = 0.32,
+#         dt: float = 0.1,
+#         max_steering_angle: float = 0.52,
+#         velocity: float = -1.0, # Negative velocity for reverse
+# ):
+#     """
+#     Generate waypoints for an Ackermann vehicle from start to goal position/orientation
+    
+#     Args:
+#         start_x, start_y: Initial position
+#         start_yaw: Initial orientation (radians)
+#         goal_x, goal_y: Goal position
+#         goal_yaw: Goal orientation (radians)
+#         wheelbase: Vehicle wheelbase (distance between front and rear axles)
+#         dt: Time step for simulation
+#         max_steering_angle: Maximum steering angle in radians
+#         velocity: Constant velocity for path generation
+        
+#     Returns:
+#         waypoints: List of (x, y, yaw) tuples representing the vehicle path
+#     """

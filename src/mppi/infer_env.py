@@ -192,12 +192,12 @@ class InferEnv():
         speeds = np.ones(n_steps) * speed
         # print('speed:', speed)
         # reference speed, closest pts dist and ind to current position
-        # reference = get_reference_trajectory(speeds, dist, ind, 
-        #                                     self.waypoints.copy(), int(n_steps),
-        #                                     self.waypoints_distances.copy(), DT=self.DT)
-        reference  = get_reference_trajectory_backward(speeds, dist, ind,
-                                                    self.waypoints.copy(), int(n_steps),
-                                                    self.waypoints_distances.copy(), DT=self.DT)
+        reference = get_reference_trajectory(speeds, dist, ind, 
+                                            self.waypoints.copy(), int(n_steps),
+                                            self.waypoints_distances.copy(), DT=self.DT)
+        # reference  = get_reference_trajectory_backward(speeds, dist, ind,
+        #                                             self.waypoints.copy(), int(n_steps),
+        #                                             self.waypoints_distances.copy(), DT=self.DT)
         orientation = state[4]
         # we care about diff between the reference and the current state so calibrate using the diff that is too far apart
         reference[3, :][reference[3, :] - orientation > 5] = np.abs(
