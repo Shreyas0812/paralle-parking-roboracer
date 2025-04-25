@@ -99,9 +99,15 @@ class MPPI():
             reward = jax.vmap(self.env.reward_fn_sey, in_axes=(0, None))(
                 states, reference_traj
             ) # [n_samples, n_steps]          
-        
+        # jax.debug.print("reward: {}", reward)
         R = jax.vmap(self.returns)(reward) # [n_samples, n_steps], pylint: disable=invalid-name
-        w = jax.vmap(self.weights, 1, 1)(R)  # [n_samples, n_steps]
+        # Mask to identify valid (finite) rows
+        # Select only valid R and da samples
+        R_valid = jnp.where(jnp.isfinite(R), R, -1e9)
+        # jax.debug.print("R: {}", R_valid)
+        w = jax.vmap(self.weights, 1, 1)(R_valid)  # [n_samples, n_steps]
+        # jax.debug.print("w nan? {}", jnp.any(jnp.isnan(w)))
+        # jax.debug.print("w: {}", w)
         da_opt = jax.vmap(jnp.average, (1, None, 1))(da, 0, w)  # [n_steps, dim_a]
         a_opt = jnp.clip(a_opt + da_opt, -1.0, 1.0)  # [n_steps, dim_a]
         if self.adaptive_covariance:
@@ -132,10 +138,11 @@ class MPPI():
         # R: [n_samples]
         # R_stdzd = (R - jnp.min(R)) / ((jnp.max(R) - jnp.min(R)) + self.damping)
         # R_stdzd = R - jnp.max(R) # [n_samples] np.float32
+
         R_stdzd = (R - jnp.max(R)) / ((jnp.max(R) - jnp.min(R)) + self.damping)  # pylint: disable=invalid-name
         w = jnp.exp(R_stdzd / self.temperature)  # [n_samples] np.float32
         w = w/jnp.sum(w)  # [n_samples] np.float32
-        return w
+        return w  # [n_samples, n_steps]
     
     
     @partial(jax.jit, static_argnums=0)
@@ -156,6 +163,7 @@ class MPPI():
         states = []
         for t in range(self.n_steps):
             env_state = rollout_step(env_state, actions[t, :], rng_key)
+            # jax.debug.print("step {} nan? {}", t, jnp.any(jnp.isnan(env_state)))
             states.append(env_state)
             
         return jnp.asarray(states)

@@ -47,6 +47,7 @@ class InferEnv():
                     args = (self.config.friction,)
                     return RK4_fn(x0, u, Ddt, vehicle_dynamics_st, args)
                 x1 = jax.lax.fori_loop(0, int(self.DT/Ddt), step_fn, x1)
+                # x1 = jnp.nan_to_num(x1, nan=0.0, posinf=1e12, neginf=-1e12)
                 return (x1, 0, x1-x)
             self.update_fn = update_fn
             
@@ -60,6 +61,7 @@ class InferEnv():
                     return RK4_fn(x0, u, Ddt, vehicle_dynamics_ks, args)
                 x_k = jax.lax.fori_loop(0, int(self.DT/Ddt), step_fn, x_k)
                 x1 = x.at[:5].set(x_k)
+                # x1 = jnp.nan_to_num(x1, nan=0.0, posinf=1e12, neginf=-1e12)
                 return (x1, 0, x1-x)
             self.update_fn = update_fn
             
@@ -91,7 +93,7 @@ class InferEnv():
         """
         cost = jnp.zeros((state.shape[0],))
         xy_cost = -jnp.linalg.norm(reference[1:, :2] - state[:, :2], ord=1, axis=1)
-        cost += xy_cost * 50.0
+        cost += xy_cost * 100.0
         # jax.debug.print("xy_cost: {}", xy_cost)
 
         vel_cost = -jnp.linalg.norm(reference[1:, 2] - state[:, 3])
@@ -99,6 +101,7 @@ class InferEnv():
         # jax.debug.print('vel_cost: {}', vel_cost)
         yaw_cost = -jnp.abs(jnp.sin(reference[1:, 3]) - jnp.sin(state[:, 4])) - \
             jnp.abs(jnp.cos(reference[1:, 4]) - jnp.cos(state[:, 4]))
+        cost += yaw_cost * 1.0
         # jax.debug.print('yaw_cost: {}', yaw_cost)
         if obstacles is not None:
             pos = state[:, :2]                         # (n_steps, 2)
@@ -107,7 +110,7 @@ class InferEnv():
             d2 = jnp.min(sqd, axis=1)                         # (n_steps,)
             obs_cost = -1.0 / (d2**2 + 1e-4)
             # obs_cost = jnp.clip(obs_cost, a_min=-30.0, a_max=0.0)
-            cost += obs_cost * 0.4
+            cost += obs_cost * 0.5
             # jax.debug.print('obs_cost: {}', obs_cost)
             
         # return 20*xy_cost + 15*vel_cost + 1*yaw_cost
@@ -192,10 +195,12 @@ class InferEnv():
         speeds = np.ones(n_steps) * speed
         # print('speed:', speed)
         # reference speed, closest pts dist and ind to current position
-        # reference = get_reference_trajectory(speeds, dist, ind, 
-        #                                     self.waypoints.copy(), int(n_steps),
-        #                                     self.waypoints_distances.copy(), DT=self.DT)
-        reference  = get_reference_trajectory_backward(speeds, dist, ind,
+        if speed >= 0:
+            reference = get_reference_trajectory(speeds, dist, ind, 
+                                                self.waypoints.copy(), int(n_steps),
+                                                self.waypoints_distances.copy(), DT=self.DT)
+        else:
+            reference = get_reference_trajectory_backward(speeds, dist, ind,
                                                     self.waypoints.copy(), int(n_steps),
                                                     self.waypoints_distances.copy(), DT=self.DT)
         orientation = state[4]
@@ -209,50 +214,6 @@ class InferEnv():
         self.reference = reference.T
         # print('reference:', reference)
         return reference.T, ind
-
-    
-    # def state_st2infer(self, st_state):
-    #     return jnp.array([st_state[2], 
-    #                     st_state[3] * jnp.cos(st_state[6]),
-    #                     st_state[5],
-    #                     st_state[3] * jnp.sin(st_state[6])])
-        
-    
-    # def state_st2nf(self, st_state):
-    #     return np.array([st_state[0], st_state[1], st_state[2],
-    #                     st_state[3] * np.cos(st_state[6]),
-    #                     st_state[4], st_state[5],
-    #                     st_state[3] * np.sin(st_state[6])])
-        
-    
-    # def state_nf2st(self, nf_state):
-    #     return np.array([nf_state[0], nf_state[1], nf_state[2],
-    #                     np.sqrt(nf_state[3] ** 2 + nf_state[6] ** 2),
-    #                     nf_state[4], nf_state[5],
-    #                     np.arctan2(nf_state[6], nf_state[3])])
-        
-    # def state_mb2st(self, mb_state):
-    #     return np.array([mb_state[0], mb_state[1], mb_state[2],
-    #                     np.sqrt(mb_state[3] ** 2 + mb_state[10] ** 2),
-    #                     mb_state[4], mb_state[5],
-    #                     np.arctan2(mb_state[10], mb_state[3])])
-        
-        
-    # def state_mb2nf(self, mb_state):
-    #     return np.array([mb_state[0], mb_state[1], mb_state[2],
-    #                     mb_state[3], mb_state[4], mb_state[5],
-    #                     mb_state[10]])
-        
-    
-    # def state_nf2mb(self, mb_state, nf_state):
-    #     mb_state[0:6] = nf_state[0:6]
-    #     mb_state[10] = nf_state[6]
-    #     return mb_state
-    
-    
-    # def state_nf2infer(self, mb_state):
-    #     return jnp.array([mb_state[2], mb_state[3], mb_state[5], mb_state[6]])
-        
 
     
 @njit(cache=True)
@@ -287,7 +248,6 @@ def nearest_point(point, trajectory):
     return projections[min_dist_segment], dist_from_segment_start, dists[min_dist_segment], t[
         min_dist_segment], min_dist_segment
 
-
 # @njit(cache=True)
 def get_reference_trajectory(predicted_speeds, dist_from_segment_start, idx, 
                              waypoints, n_steps, waypoints_distances, DT):
@@ -317,7 +277,7 @@ def get_reference_trajectory(predicted_speeds, dist_from_segment_start, idx,
     index_relative = np.int_(np.ones((n_steps + 1,)))
     for i in range(n_steps + 1):
         index_relative[i] = (waypoints_distances_relative <= s_relative[i]).sum()
-    index_absolute = np.mod(idx + index_relative, waypoints.shape[0] - 1)
+    index_absolute = np.clip(idx + index_relative, 0, waypoints.shape[0] - 2)
     # waypoints_distances_relative[index_relative] - waypoints_distances[index_absolute] is the distance to the start of the segment
     # This expression gives the cumulative distance from the current position to the start of the segment you're currently in at each timestep.
     segment_part = s_relative - (
@@ -326,13 +286,13 @@ def get_reference_trajectory(predicted_speeds, dist_from_segment_start, idx,
     t = (segment_part / waypoints_distances[index_absolute])
     # print(np.all(np.logical_and((t < 1.0), (t > 0.0))))
 
-    position_diffs = (waypoints[np.mod(index_absolute + 1, waypoints.shape[0] - 1)][:, (1, 2)] -
+    position_diffs = (waypoints[np.clip(index_absolute + 1, 0, waypoints.shape[0] - 2)][:, (1, 2)] -
                         waypoints[index_absolute][:, (1, 2)])
-    position_diff_s = (waypoints[np.mod(index_absolute + 1, waypoints.shape[0] - 1)][:, 0] -
+    position_diff_s = (waypoints[np.clip(index_absolute + 1, 0, waypoints.shape[0] - 2)][:, 0] -
                         waypoints[index_absolute][:, 0])
-    orientation_diffs = (waypoints[np.mod(index_absolute + 1, waypoints.shape[0] - 1)][:, 3] -
+    orientation_diffs = (waypoints[np.clip(index_absolute + 1, 0, waypoints.shape[0] - 2)][:, 3] -
                             waypoints[index_absolute][:, 3])
-    speed_diffs = (waypoints[np.mod(index_absolute + 1, waypoints.shape[0] - 1)][:, 5] -
+    speed_diffs = (waypoints[np.clip(index_absolute + 1, 0, waypoints.shape[0] - 2)][:, 5] -
                     waypoints[index_absolute][:, 5])
 
     interpolated_positions = waypoints[index_absolute][:, (1, 2)] + (t * position_diffs.T).T
@@ -386,21 +346,20 @@ def get_reference_trajectory_backward(predicted_speeds,
     index_relative = np.int_(np.ones((n_steps + 1,)))
     for i in range(n_steps + 1):
         index_relative[i] = (-waypoints_distances_relative <= (-s_relative[i])).sum()
-    index_absolute = np.mod(idx - index_relative, waypoints.shape[0] - 1)
+    index_absolute = np.clip(idx - index_relative, 0, waypoints.shape[0] - 2)
     # waypoints_distances_relative[index_relative] - waypoints_distances[index_absolute] is the distance to the start of the segment
     # This expression gives the cumulative distance from the current position to the start of the segment you're currently in at each timestep.
     segment_part = s_relative - (
             waypoints_distances_relative[index_relative] + waypoints_distances[index_absolute])
 
     t = (segment_part / -waypoints_distances[index_absolute])
-
-    position_diffs = (waypoints[np.mod(index_absolute - 1, waypoints.shape[0] - 1)][:, (1, 2)] -
+    position_diffs = (waypoints[np.clip(index_absolute - 1, 0, waypoints.shape[0] - 2)][:, (1, 2)] -
                         waypoints[index_absolute][:, (1, 2)])
-    position_diff_s = (waypoints[np.mod(index_absolute - 1, waypoints.shape[0] - 1)][:, 0] -
+    position_diff_s = (waypoints[np.clip(index_absolute - 1, 0, waypoints.shape[0] - 2)][:, 0] -
                         waypoints[index_absolute][:, 0])
-    orientation_diffs = (waypoints[np.mod(index_absolute - 1, waypoints.shape[0] - 1)][:, 3] -
+    orientation_diffs = (waypoints[np.clip(index_absolute - 1, 0, waypoints.shape[0] - 2)][:, 3] -
                             waypoints[index_absolute][:, 3])
-    speed_diffs = (waypoints[np.mod(index_absolute - 1, waypoints.shape[0] - 1)][:, 5] -
+    speed_diffs = (waypoints[np.clip(index_absolute - 1, 0, waypoints.shape[0] - 2)][:, 5] -
                     waypoints[index_absolute][:, 5])
 
     interpolated_positions = waypoints[index_absolute][:, (1, 2)] + (t * position_diffs.T).T
@@ -422,4 +381,4 @@ def get_reference_trajectory_backward(predicted_speeds,
         np.zeros(len(interpolated_speeds))
     ])
     return reference
-    
+

@@ -13,7 +13,9 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry, OccupancyGrid
 from ackermann_msgs.msg import AckermannDriveStamped
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
+from parallel_parking_interfaces.msg import Traj
 from utils.ros_np_multiarray import to_multiarray_f32, to_numpy_f32
+from utils.utils import pose_to_xyyaw, poses_to_xyyaw
 from ament_index_python.packages import get_package_share_directory
 
 from infer_env import InferEnv
@@ -36,33 +38,39 @@ class MPPI_Node(Node):
         super().__init__('lmppi_node')
         self.config = utils.ConfigYAML()
         config_dir = get_package_share_directory('mppi')
-        config_path = os.path.join(config_dir, 'config_map_edited.yaml')
+        config_path = os.path.join(config_dir, 'config_park.yaml')
         self.config.load_file(config_path)
         self.config.norm_params = np.array(self.config.norm_params).T
         if self.config.random_seed is None:
             self.config.random_seed = np.random.randint(0, 1e6)
-        jrng = jax_utils.oneLineJaxRNG(self.config.random_seed)    
-        map_dir = os.path.join(config_dir, 'waypoints/')
-        # map_info = np.genfromtxt(map_dir + 'map_info.txt', delimiter='|', dtype='str')]
-        map_info = None
-        map_ind = self.config.map_ind if hasattr(self.config, 'map_ind') else None
-        track, self.config = Track.load_map(map_dir, map_info, map_ind, self.config)
-        # track.waypoints[:, 3] += 0.5 * np.pi
-        self.infer_env = InferEnv(track, self.config, DT=self.config.sim_time_step)
-        self.mppi = MPPI(self.config, self.infer_env, jrng)
-
-        # Do a dummy call on the MPPI to initialize the variables
-        state_c_0 = np.asarray([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        self.control = np.asarray([0.0, 0.0]) # [steering angle, speed]
-        reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), self.config.ref_vel, self.config.n_steps)
-        self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
-        self.get_logger().info('MPPI initialized')
+        self.jrng = jax_utils.oneLineJaxRNG(self.config.random_seed)    
+        # map_dir = os.path.join(config_dir, 'waypoints/')
+        map_dir = None
+        if map_dir is not None:
+            map_info = None
+            # map_info = np.genfromtxt(map_dir + 'map_info.txt', delimiter='|', dtype='str')]
+            map_ind = self.config.map_ind if hasattr(self.config, 'map_ind') else None
+            self.track, self.config = Track.load_map(map_dir, map_info, map_ind, self.config)
+            # self.track.waypoints[:, 3] += 0.5 * np.pi
+            self.infer_env = InferEnv(self.track, self.config, DT=self.config.sim_time_step)
+            self.mppi = MPPI(self.config, self.infer_env, self.jrng)
+            # Do a dummy call on the MPPI to initialize the variables
+            state_c_0 = np.asarray([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            self.control = np.asarray([0.0, 0.0]) # [steering angle, speed]
+            reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), self.config.ref_vel, self.config.n_steps)
+            self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
+            self.get_logger().info('MPPI initialized')
+        else:
+            self.track = None
+            self.infer_env = None
+            self.mppi = None
         
         qos = rclpy.qos.QoSProfile(history=rclpy.qos.QoSHistoryPolicy.KEEP_LAST,
                                    depth=10,
                                    reliability=rclpy.qos.QoSReliabilityPolicy.RELIABLE,
                                    durability=rclpy.qos.QoSDurabilityPolicy.VOLATILE)
-        
+        self.declare_parameter('extrapolated_path_topic', '/extrapolated_path')
+        extrapolated_path_topic = self.get_parameter('extrapolated_path_topic').get_parameter_value().string_value
         # create subscribers
         self.grid_sub = self.create_subscription(OccupancyGrid, "/occupancy_grid", self.grid_callback, qos)        
 
@@ -70,6 +78,8 @@ class MPPI_Node(Node):
             self.pose_sub = self.create_subscription(Odometry, "/ego_racecar/odom", self.pose_callback, qos)
         else:
             self.pose_sub = self.create_subscription(Odometry, "/pf/pose/odom", self.pose_callback, qos)
+
+        self.traj_sub = self.create_subscription(Traj, extrapolated_path_topic, self.traj_callback, qos)
 
         # publishers
         self.drive_pub = self.create_publisher(AckermannDriveStamped, "/drive", qos)
@@ -79,6 +89,8 @@ class MPPI_Node(Node):
         self.obstacle_marker_pub = self.create_publisher(Marker, "/obstacle_points_marker", 10)
         self.point_marker_pub = self.create_publisher(Marker, "/point_marker", 10)
         self.point_marker_pub_rev = self.create_publisher(Marker, "/point_marker_rev", 10)
+        
+        self.traj_marker_pub = self.create_publisher(Marker, "/traj_marker", 10)
 
         # map info
         self.map_received = False
@@ -87,6 +99,62 @@ class MPPI_Node(Node):
         self.resolution = None
         self.origin = None
         self.occup_pos = None
+
+    def traj_callback(self, traj_msg):
+        if self.track is None or self.infer_env is None or self.mppi is None:
+            trajectory = traj_msg.traj
+            end_pose = traj_msg.end_pose
+            # Convert the trajectory to a numpy array
+            trajectory = poses_to_xyyaw(trajectory)
+            end_pose = pose_to_xyyaw(end_pose)
+            self.publish_traj_marker(trajectory, frame_id="map")
+            # print(f"trajectory: {trajectory}")
+            # print(f"end_pose: {end_pose}")
+            
+            self.track, self.dyna_config = Track.load_traj(trajectory, self.config)
+            self.infer_env = InferEnv(self.track, self.config, DT=self.config.sim_time_step)
+            self.mppi = MPPI(self.config, self.infer_env, self.jrng)
+            # Do a dummy call on the MPPI to initialize the variables
+            state_c_0 = np.asarray([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            self.control = np.asarray([0.0, 0.0])
+            reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), self.config.ref_vel, self.config.n_steps)
+            self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
+            self.get_logger().info('MPPI initialized')
+
+    def publish_traj_marker(self, traj: np.ndarray, frame_id="map"):
+        """
+        Publishes a trajectory as a Marker line strip.
+
+        Args:
+            traj (np.ndarray): Shape (N, 2) or (N, 3), where each row is (x, y) or (x, y, z)
+            frame_id (str): Frame to visualize in RViz
+        """
+        marker = Marker()
+        marker.header.frame_id = frame_id
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.ns = "traj"
+        marker.id = 0
+        marker.type = Marker.LINE_STRIP
+        marker.action = Marker.ADD
+        marker.scale.x = 0.1  # line width
+
+        marker.color.a = 1.0
+        marker.color.r = 1.0
+        marker.color.g = 0.0
+        marker.color.b = 0.0
+
+        marker.pose.orientation.w = 1.0  # identity quaternion
+
+        # fill in points
+        for p in traj[:, :2]:
+            pt = Point()
+            pt.x = float(p[0])
+            pt.y = float(p[1])
+            pt.z = float(p[2]) if p.shape[0] > 2 else 0.0
+            marker.points.append(pt)
+
+        self.traj_marker_pub.publish(marker)
+
 
     # @TODO: add a callback for the laser scan data and get the scan data from obstacles to add the cost to the MPPI
     def grid_callback(self, grid_msg):
@@ -174,6 +242,7 @@ class MPPI_Node(Node):
 
         return filtered_obstacles
 
+
     def publish_obstacle_points(self, obstacle_world_coords):
         marker = Marker()
         marker.header.frame_id = "map"
@@ -201,11 +270,6 @@ class MPPI_Node(Node):
 
         self.obstacle_marker_pub.publish(marker)
 
-    def world_to_grid(self, x, y, origin, resolution):
-        i = int((y - origin.y) / resolution)
-        j = int((x - origin.x) / resolution)
-        return i, j
-    
     def publish_point_marker(self, x, y, rev=False):
         marker = Marker()
         marker.header.frame_id = "map"
@@ -252,6 +316,9 @@ class MPPI_Node(Node):
         if not self.map_received:
             self.get_logger().warning("Waiting for map data...")
             return
+        elif self.mppi is None:
+            self.get_logger().warning("Waiting for the trajectory.")
+            return
 
         pose = pose_msg.pose.pose
         twist = pose_msg.twist.twist
@@ -280,15 +347,9 @@ class MPPI_Node(Node):
         filtered_obstacles = self.filtering_roi_obstacles(state_c_0, self.occup_pos)
         self.publish_obstacle_points(filtered_obstacles)
         
-        find_waypoint_vel = min(self.config.ref_vel, twist.linear.x)
+        find_waypoint_vel = max(self.config.ref_vel, twist.linear.x)
+        find_waypoint_vel = np.clip(find_waypoint_vel, 0.0, self.config.ref_vel)
         reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), find_waypoint_vel, self.config.n_steps)
-        # print(f"waypoint_ind: {waypoint_ind}")
-        # print(f"p: {p}")
-        # self.publish_point_marker(p[0], p[1])
-        # print(f"ind_rev: {ind_rev}")
-        # print(f"p_rev: {p_rev}")
-        # self.publish_point_marker(p_rev[0], p_rev[1], rev=True)
-        # exit()
         # reference_traj = np.zeros((self.config.n_steps, 2))
         ## MPPI call
         self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj), jnp.asarray(filtered_obstacles))
