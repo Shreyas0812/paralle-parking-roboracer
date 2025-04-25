@@ -73,11 +73,11 @@ def generate_launch_description():
                 {"y_ego_threshold": y_ego_threshold}
             ]
         ),
-        # MPC node
+        # Traj Generation node
         Node(
             package="parallel_parking",
-            executable="mpc_node.py",
-            name="mpc_node",
+            executable="traj_gen_node.py",
+            name="traj_gen_node",
             output="screen",
             parameters=[
                 {"pose_topic": pose_topic}
