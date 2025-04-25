@@ -63,7 +63,7 @@ class MPCNode(Node):
         euler_angles = quat2euler([qw, qx, qy, qz])
         yaw = euler_angles[2]
 
-        extrapolated_waypoints = generateAckermannWaypoints(start_x=pos_x, start_y=pos_y, start_yaw=yaw, goal_x=self.wp1[0], goal_y=self.wp1[1], goal_yaw=self.wp1[2], wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=1.0)
+        extrapolated_waypoints = generateAckermannWaypoints(start_x=pos_x, start_y=pos_y, start_yaw=yaw, goal_x=self.wp1[0], goal_y=self.wp1[1], goal_yaw=self.wp1[2], wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
 
         # self.get_logger().info(f"Waypoints: {extrapolated_waypoints}", throttle_duration_sec=1.0)
 
