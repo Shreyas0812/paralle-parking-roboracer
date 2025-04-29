@@ -123,7 +123,7 @@ class MPPI():
             traj_opt = self.rollout(a_opt, env_state, rng_da_split2)
         else:
             traj_opt = states[0]
-            
+
         return a_opt, a_cov, states, traj_opt
 
    

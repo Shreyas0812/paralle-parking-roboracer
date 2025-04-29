@@ -100,18 +100,20 @@ class MPPI_Node(Node):
         self.origin = None
         self.occup_pos = None
 
+        # Traj thres
+        self.pos_thres = 0.05 # m
+        self.yaw_thres = 0.1 # rad
+
     def traj_callback(self, traj_msg):
         if self.track is None or self.infer_env is None or self.mppi is None:
             trajectory = traj_msg.traj
             end_pose = traj_msg.end_pose
             # Convert the trajectory to a numpy array
             trajectory = poses_to_xyyaw(trajectory)
-            end_pose = pose_to_xyyaw(end_pose)
+            self.end_pose = pose_to_xyyaw(end_pose)
             self.publish_traj_marker(trajectory, frame_id="map")
-            # print(f"trajectory: {trajectory}")
-            # print(f"end_pose: {end_pose}")
             
-            self.track, self.dyna_config = Track.load_traj(trajectory, self.config)
+            self.track, self.config = Track.load_traj(trajectory, self.config)
             self.infer_env = InferEnv(self.track, self.config, DT=self.config.sim_time_step)
             self.mppi = MPPI(self.config, self.infer_env, self.jrng)
             # Do a dummy call on the MPPI to initialize the variables
@@ -207,7 +209,7 @@ class MPPI_Node(Node):
 
         return out
 
-    def filtering_roi_obstacles(self, state, obstacle_world_coords, roi_area=(5.0, 3.0), max_obstacles=200):
+    def filtering_roi_obstacles(self, state, obstacle_world_coords, roi_area=(2.0, 2.0), max_obstacles=200):
         '''
         Filters obstacles within a rectangular ROI in front of the car.
         
@@ -241,7 +243,6 @@ class MPPI_Node(Node):
         filtered_obstacles = self.uniform_resample(filtered_obstacles, max_obstacles)    
 
         return filtered_obstacles
-
 
     def publish_obstacle_points(self, obstacle_world_coords):
         marker = Marker()
