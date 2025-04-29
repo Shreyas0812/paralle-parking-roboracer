@@ -75,26 +75,10 @@ class TrajGen(Node):
         euler_angles = quat2euler([qw, qx, qy, qz])
         yaw = euler_angles[2]
 
-        # Here we add a check if we need to go to wp1 or wp2
+        # Points from goal to the start
+        reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp1[0], start_y=self.wp1[1], start_yaw=self.wp1[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
 
-        # dist and angle to wp1
-        check_wp_pl = self.wp_rest[self.switch_wp_index][0:2]
-
-        dist_wp1 = np.sqrt((pos_x - check_wp_pl[0])**2 + (pos_y - check_wp_pl[1])**2)
-        angle_wp1 = np.arctan2(check_wp_pl[1] - pos_y, check_wp_pl[0] - pos_x)
-
-        
-        if dist_wp1 < self.wp1_dist_thresh and abs(angle_wp1 - yaw) < self.wp1_angle_thresh:
-            self.switched_path = True
-
-            extrapolated_waypoints = generateAckermannWaypoints(start_x=pos_x, start_y=pos_y, start_yaw=yaw, goal_x=self.wp2[0], goal_y=self.wp2[1], goal_yaw=self.wp2[2], wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
-            
-        else:
-            if not self.switched_path:
-                extrapolated_waypoints = generateAckermannWaypoints(start_x=pos_x, start_y=pos_y, start_yaw=yaw, goal_x=self.wp1[0], goal_y=self.wp1[1], goal_yaw=self.wp1[2], wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=2.0)
-
-
-        self.publish_extrapolated_path(extrapolated_waypoints)
+        self.publish_extrapolated_path(reversed_extrapolated_pts)
 
     def publish_extrapolated_path(self, extrapolated_waypoints):
         path = Traj()
@@ -108,18 +92,18 @@ class TrajGen(Node):
 
             path.traj.append(pose)
         
-        if not self.switched_path:
-            for i, wp in enumerate(self.wp_rest):
-                x, y, yaw, qw, qx, qy, qz = wp
+        # if not self.switched_path:
+        #     for i, wp in enumerate(self.wp_rest):
+        #         x, y, yaw, qw, qx, qy, qz = wp
 
-                pose = Pose()
-                pose.position = Point(x=x, y=y, z=0.0)
-                pose.orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
+        #         pose = Pose()
+        #         pose.position = Point(x=x, y=y, z=0.0)
+        #         pose.orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
                 
-                path.traj.append(pose)
+        #         path.traj.append(pose)
 
-                if i == len(self.wp_rest) - 1:
-                    path.end_pose = pose
+        #         if i == len(self.wp_rest) - 1:
+        #             path.end_pose = pose
             
 
         self.extrapolated_path_publisher_.publish(path)
