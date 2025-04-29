@@ -193,7 +193,6 @@ class InferEnv():
         #     speeds = self.waypoints[ind:ind+self.n_steps, vind]
         # else:
         speeds = np.ones(n_steps) * speed
-        # print('speed:', speed)
         # reference speed, closest pts dist and ind to current position
         if speed >= 0:
             reference = get_reference_trajectory(speeds, dist, ind, 
