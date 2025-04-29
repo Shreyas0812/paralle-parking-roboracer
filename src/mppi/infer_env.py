@@ -270,6 +270,7 @@ def get_reference_trajectory(predicted_speeds, dist_from_segment_start, idx,
     s_relative[0] = dist_from_segment_start
     s_relative[1:] = predicted_speeds * DT
     s_relative = np.cumsum(s_relative)
+    # idx += 5
     # np.roll(..., -idx) shifts the array left so that the segment starting at your "idx" becomes the start
     # waypoints_distances_relative is cumulative distance from the start of the "idx"
     waypoints_distances_relative = np.cumsum(np.roll(waypoints_distances, -idx))

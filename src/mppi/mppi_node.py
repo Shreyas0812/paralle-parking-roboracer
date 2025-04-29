@@ -101,8 +101,10 @@ class MPPI_Node(Node):
         self.occup_pos = None
 
         # Traj thres
-        self.pos_thres = 0.05 # m
+        self.filtered_thres = 0.5 # m
+        self.pos_thres = 0.1 # m
         self.yaw_thres = 0.1 # rad
+        self.waiting_for_traj = False
 
     def traj_callback(self, traj_msg):
         if self.track is None or self.infer_env is None or self.mppi is None:
@@ -121,6 +123,7 @@ class MPPI_Node(Node):
             self.control = np.asarray([0.0, 0.0])
             reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), self.config.ref_vel, self.config.n_steps)
             self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
+            self.waiting_for_traj = False
             self.get_logger().info('MPPI initialized')
 
     def publish_traj_marker(self, traj: np.ndarray, frame_id="map"):
@@ -305,6 +308,27 @@ class MPPI_Node(Node):
         else:
             self.point_marker_pub.publish(marker)
 
+    def check_is_traj_done(self, state: np.ndarray, end_pose: np.ndarray) -> bool:
+        """
+        Check if the trajectory is done by checking the distance and yaw difference
+        between the current state and the end pose.
+
+        Args:
+            state (np.ndarray): current vehicle state [x, y, steering, v, yaw, ..., ...]
+            end_pose (np.ndarray): end pose [x, y, yaw]
+
+        Returns:
+            bool: True if the trajectory is done, False otherwise
+        """
+        x_diff = state[0] - end_pose[0]
+        y_diff = state[1] - end_pose[1]
+        dist = np.sqrt(x_diff**2 + y_diff**2)
+        self.get_logger().info(f"dist: {dist}")
+        yaw_diff = np.abs(state[4] - end_pose[2])
+        if dist < self.pos_thres:
+            return True
+        return False
+
     def pose_callback(self, pose_msg):
         """
         Callback function for subscribing to particle filter's inferred pose.
@@ -317,7 +341,7 @@ class MPPI_Node(Node):
         if not self.map_received:
             self.get_logger().warning("Waiting for map data...")
             return
-        elif self.mppi is None:
+        elif self.mppi is None or self.waiting_for_traj:
             self.get_logger().warning("Waiting for the trajectory.")
             return
 
@@ -345,37 +369,50 @@ class MPPI_Node(Node):
             twist.angular.z,
             beta,
         ])
-        filtered_obstacles = self.filtering_roi_obstacles(state_c_0, self.occup_pos)
-        self.publish_obstacle_points(filtered_obstacles)
-        
-        find_waypoint_vel = max(self.config.ref_vel, twist.linear.x)
-        find_waypoint_vel = np.clip(find_waypoint_vel, 0.0, self.config.ref_vel)
-        reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), find_waypoint_vel, self.config.n_steps)
-        # reference_traj = np.zeros((self.config.n_steps, 2))
-        ## MPPI call
-        self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj), jnp.asarray(filtered_obstacles))
-        # self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
-        mppi_control = numpify(self.mppi.a_opt[0]) * self.config.norm_params[0, :2]/2
-        # print(f"mppi_control: {mppi_control}")
-        self.control[0] = float(mppi_control[0]) * self.config.sim_time_step + self.control[0]
-        self.control[1] = float(mppi_control[1]) * self.config.sim_time_step + twist.linear.x
-        
-        if self.reference_pub.get_subscription_count() > 0:
-            ref_traj_cpu = numpify(reference_traj)
-            arr_msg = to_multiarray_f32(ref_traj_cpu.astype(np.float32))
-            self.reference_pub.publish(arr_msg)
 
-        if self.opt_traj_pub.get_subscription_count() > 0:
-            opt_traj_cpu = numpify(self.mppi.traj_opt)
-            arr_msg = to_multiarray_f32(opt_traj_cpu.astype(np.float32))
-            self.opt_traj_pub.publish(arr_msg)
+        if self.check_is_traj_done(state_c_0, self.end_pose):
+            self.mppi = None
+            self.control = np.asarray([0.0, 0.0])
+            self.get_logger().info("Trajectory done, stopping the MPPI.")
+        else:
+            filtered_obstacles = self.filtering_roi_obstacles(state_c_0, self.occup_pos)
+            self.publish_obstacle_points(filtered_obstacles)
+            
+            find_waypoint_vel = max(self.config.ref_vel, twist.linear.x)
+            find_waypoint_vel = np.clip(find_waypoint_vel, 0.0, self.config.ref_vel)
+            reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), find_waypoint_vel, self.config.n_steps)
+            # Doing filtering and help mppi to not get stucked in oscillations
+            distances = np.linalg.norm(reference_traj[:, :2] - self.end_pose[:2], axis=1)
+            num_within = np.sum(distances < self.filtered_thres)
+            # If at least half are close to the goal
+            if num_within >= (self.config.n_steps // 2):
+                reference_traj = np.tile(self.end_pose, (self.config.n_steps, 1))
+            if np.any(distances < self.filtered_thres):
+                reference_traj = np.tile(self.end_pose, (self.config.n_steps + 1, 1))
+            ## MPPI call
+            self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj), jnp.asarray(filtered_obstacles))
+            # self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
+            mppi_control = numpify(self.mppi.a_opt[0]) * self.config.norm_params[0, :2]/2
+            # print(f"mppi_control: {mppi_control}")
+            self.control[0] = float(mppi_control[0]) * self.config.sim_time_step + self.control[0]
+            self.control[1] = float(mppi_control[1]) * self.config.sim_time_step + twist.linear.x
+            
+            if self.reference_pub.get_subscription_count() > 0:
+                ref_traj_cpu = numpify(reference_traj)
+                arr_msg = to_multiarray_f32(ref_traj_cpu.astype(np.float32))
+                self.reference_pub.publish(arr_msg)
 
-        # if twist.linear.x < self.config.init_vel:
-        #     self.control = [0.0, self.config.init_vel * 2]
+            if self.opt_traj_pub.get_subscription_count() > 0:
+                opt_traj_cpu = numpify(self.mppi.traj_opt)
+                arr_msg = to_multiarray_f32(opt_traj_cpu.astype(np.float32))
+                self.opt_traj_pub.publish(arr_msg)
 
-        if np.isnan(self.control).any() or np.isinf(self.control).any():
-            self.control = np.array([0.0, 0.0])
-            self.mppi.a_opt = np.zeros_like(self.mppi.a_opt)
+            # if twist.linear.x < self.config.init_vel:
+            #     self.control = [0.0, self.config.init_vel * 2]
+
+            if np.isnan(self.control).any() or np.isinf(self.control).any():
+                self.control = np.array([0.0, 0.0])
+                self.mppi.a_opt = np.zeros_like(self.mppi.a_opt)
 
         # Publish the control command
         drive_msg = AckermannDriveStamped()
@@ -383,8 +420,11 @@ class MPPI_Node(Node):
         drive_msg.header.frame_id = "base_link"
         drive_msg.drive.steering_angle = self.control[0]
         drive_msg.drive.speed = self.control[1]
-        self.get_logger().info(f"Steering Angle: {drive_msg.drive.steering_angle}, Speed: {drive_msg.drive.speed}")
+        # self.get_logger().info(f"Steering Angle: {drive_msg.drive.steering_angle}, Speed: {drive_msg.drive.speed}")
         self.drive_pub.publish(drive_msg)
+
+        if self.mppi == None:
+            self.waiting_for_traj = True
         
 
 def main(args=None):
