@@ -98,6 +98,16 @@ class TrajGen(Node):
 
             # Always go to wp1 first
             if self.gotowp1:        
+                
+                ####################################################################################
+                # TEMP CODE TO RESET THE CAR TO WP1
+                if dist_to_wp1 > 5.0:
+                    self.gotowp1 = True
+                    return
+                ####################################################################################
+
+
+
                 # Check if the car is close to the first waypoint
                 if dist_to_wp1 < self.wp1_dist_thresh and abs(angle_to_wp) < self.wp1_angle_thresh:
                     self.gotowp1 = False
@@ -122,7 +132,7 @@ class TrajGen(Node):
 
             self.publish_extrapolated_path(extrapolated_waypoints)
         else:
-            self.get_logger().info("Car is parked, no need to follow the waypoints anymore.")
+            self.get_logger().info("Car is parked, no need to follow the waypoints anymore.", throttle_duration_sec=1.0)
             
 
     def publish_extrapolated_path(self, extrapolated_waypoints):
