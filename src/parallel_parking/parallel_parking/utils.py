@@ -220,31 +220,41 @@ def generateAckermannWaypoints(
         
     return waypoints
 
-# def getReverseAckermannWaypoints(
-#         start_x: float = 0.0,
-#         start_y: float = 0.0,
-#         start_yaw: float = 0.0,
-#         goal_x: float = 0.0,
-#         goal_y: float = 0.0,
-#         goal_yaw: float = 0.0,
-#         wheelbase: float = 0.32,
-#         dt: float = 0.1,
-#         max_steering_angle: float = 0.52,
-#         velocity: float = -1.0, # Negative velocity for reverse
-# ):
-#     """
-#     Generate waypoints for an Ackermann vehicle from start to goal position/orientation
-    
-#     Args:
-#         start_x, start_y: Initial position
-#         start_yaw: Initial orientation (radians)
-#         goal_x, goal_y: Goal position
-#         goal_yaw: Goal orientation (radians)
-#         wheelbase: Vehicle wheelbase (distance between front and rear axles)
-#         dt: Time step for simulation
-#         max_steering_angle: Maximum steering angle in radians
-#         velocity: Constant velocity for path generation
-        
-#     Returns:
-#         waypoints: List of (x, y, yaw) tuples representing the vehicle path
-#     """
+import numpy as np
+
+def generate_s_curve_waypoints(
+    start_x, start_y, goal_x, goal_y, num_points=50, epsilon=0.01
+):
+    """
+    Generate waypoints along an S-shaped sigmoid curve from start to goal.
+    Returns: list of (x, y, yaw) tuples
+    """
+    # Ensure start_x < goal_x for parameterization
+    if goal_x < start_x:
+        start_x, goal_x = goal_x, start_x
+        start_y, goal_y = goal_y, start_y
+
+    # Sigmoid parameters
+    L = start_y
+    U = goal_y
+
+    # Steepness parameter for sigmoid
+    k = 2 * np.log((1 - epsilon) / epsilon) / (goal_x - start_x)
+    x0 = (start_x + goal_x) / 2
+
+    def sigmoid(x):
+        return 1 / (1 + np.exp(-k * (x - x0)))
+
+    def y_curve(x):
+        return L + (U - L) * sigmoid(x)
+
+    # Sample points between start_x and goal_x
+    x_vals = np.linspace(start_x, goal_x, num_points)
+    y_vals = y_curve(x_vals)
+
+    # Compute yaw (heading) at each point using the derivative
+    dy_dx = np.gradient(y_vals, x_vals)
+    yaws = np.arctan2(dy_dx, 1.0)
+
+    waypoints = [(float(x), float(y), float(yaw)) for x, y, yaw in zip(x_vals, y_vals, yaws)]
+    return waypoints
