@@ -108,9 +108,9 @@ class InferEnv():
             diffs = pos[:, None, :] - obstacles[None, :, :]  # (n_steps, n_obs, 2)
             sqd = diffs[..., 0]**2 + diffs[..., 1]**2         # (n_steps, n_obs)
             d2 = jnp.min(sqd, axis=1)                         # (n_steps,)
-            obs_cost = -1.0 / (d2 + 1e-4)
+            obs_cost = -1.0 / (d2**2 + 1e-4)
             # obs_cost = jnp.clip(obs_cost, a_min=-30.0, a_max=0.0)
-            cost += obs_cost * 0.3
+            cost += obs_cost * 0.1
             # jax.debug.print('obs_cost: {}', obs_cost)
             
         # return 20*xy_cost + 15*vel_cost + 1*yaw_cost
@@ -166,7 +166,7 @@ class InferEnv():
         return ref_traj
     
     
-    def get_refernece_traj(self, state, target_speed=None, n_steps=10, vind=5, speed_factor=1.0):
+    def get_refernece_traj(self, state, target_speed=None, n_steps=10, vind=5, speed_factor=1.0, reverse=False):
         '''
         Get the reference trajectory for the given predicted speeds and distances.
         Args:
@@ -192,9 +192,11 @@ class InferEnv():
         # if ind < self.waypoints.shape[0] - self.n_steps:
         #     speeds = self.waypoints[ind:ind+self.n_steps, vind]
         # else:
+
         speeds = np.ones(n_steps) * speed
+
         # reference speed, closest pts dist and ind to current position
-        if speed >= 0:
+        if not reverse:
             reference = get_reference_trajectory(speeds, dist, ind, 
                                                 self.waypoints.copy(), int(n_steps),
                                                 self.waypoints_distances.copy(), DT=self.DT)
@@ -269,6 +271,8 @@ def get_reference_trajectory(predicted_speeds, dist_from_segment_start, idx,
     s_relative[0] = dist_from_segment_start
     s_relative[1:] = predicted_speeds * DT
     s_relative = np.cumsum(s_relative)
+    # print(f's_relative: {s_relative}')
+
     # idx += 5
     # np.roll(..., -idx) shifts the array left so that the segment starting at your "idx" becomes the start
     # waypoints_distances_relative is cumulative distance from the start of the "idx"
@@ -278,6 +282,7 @@ def get_reference_trajectory(predicted_speeds, dist_from_segment_start, idx,
     for i in range(n_steps + 1):
         index_relative[i] = (waypoints_distances_relative <= s_relative[i]).sum()
     index_absolute = np.clip(idx + index_relative, 0, waypoints.shape[0] - 2)
+    index_relative = np.clip(index_relative, 0, waypoints.shape[0] - 2)
     # waypoints_distances_relative[index_relative] - waypoints_distances[index_absolute] is the distance to the start of the segment
     # This expression gives the cumulative distance from the current position to the start of the segment you're currently in at each timestep.
     segment_part = s_relative - (
@@ -329,10 +334,13 @@ def get_reference_trajectory_backward(predicted_speeds,
     Supports both forward and reverse predicted_speeds.
     Returns reference = [x, y, v_ref, yaw_ref, s_abs, 0, 0] shape (7, n_steps+1).
     """
+    car_length = 0.32 * 0.2 # to trail behind a little bit
     # assert predicted_speeds <= 0
     # build signed arc-length increments
     delta_s = np.ones((n_steps ,)) * predicted_speeds * DT
     s_relative = np.cumsum(np.concatenate(([0.0], delta_s)))
+    s_relative = np.where(s_relative < 0, s_relative, 0.0)
+    print(f's_relative: {s_relative}')
     # np.roll(..., -idx) shifts the array left so that the segment starting at your "idx" becomes the start
     # waypoints_distances_relative is cumulative distance from the start of the "idx"
     N = waypoints.shape[0] - 1
@@ -346,20 +354,21 @@ def get_reference_trajectory_backward(predicted_speeds,
     index_relative = np.int_(np.ones((n_steps + 1,)))
     for i in range(n_steps + 1):
         index_relative[i] = (-waypoints_distances_relative <= (-s_relative[i])).sum()
-    index_absolute = np.clip(idx - index_relative, 0, waypoints.shape[0] - 2)
+    index_absolute = np.clip(idx + index_relative, 0, waypoints.shape[0] - 2)
+    index_relative = np.clip(index_relative, 0, waypoints.shape[0] - 2)
     # waypoints_distances_relative[index_relative] - waypoints_distances[index_absolute] is the distance to the start of the segment
     # This expression gives the cumulative distance from the current position to the start of the segment you're currently in at each timestep.
     segment_part = s_relative - (
             waypoints_distances_relative[index_relative] + waypoints_distances[index_absolute])
 
     t = (segment_part / -waypoints_distances[index_absolute])
-    position_diffs = (waypoints[np.clip(index_absolute - 1, 0, waypoints.shape[0] - 2)][:, (1, 2)] -
+    position_diffs = (waypoints[np.clip(index_absolute + 1, 0, waypoints.shape[0] - 2)][:, (1, 2)] -
                         waypoints[index_absolute][:, (1, 2)])
-    position_diff_s = (waypoints[np.clip(index_absolute - 1, 0, waypoints.shape[0] - 2)][:, 0] -
+    position_diff_s = (waypoints[np.clip(index_absolute + 1, 0, waypoints.shape[0] - 2)][:, 0] -
                         waypoints[index_absolute][:, 0])
-    orientation_diffs = (waypoints[np.clip(index_absolute - 1, 0, waypoints.shape[0] - 2)][:, 3] -
+    orientation_diffs = (waypoints[np.clip(index_absolute + 1, 0, waypoints.shape[0] - 2)][:, 3] -
                             waypoints[index_absolute][:, 3])
-    speed_diffs = (waypoints[np.clip(index_absolute - 1, 0, waypoints.shape[0] - 2)][:, 5] -
+    speed_diffs = (waypoints[np.clip(index_absolute + 1, 0, waypoints.shape[0] - 2)][:, 5] -
                     waypoints[index_absolute][:, 5])
 
     interpolated_positions = waypoints[index_absolute][:, (1, 2)] + (t * position_diffs.T).T

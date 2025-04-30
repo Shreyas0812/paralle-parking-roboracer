@@ -176,7 +176,7 @@ def generateAckermannWaypoints(
     k_p = 0.5  
     lookahead_distance = 0.5  
 
-    pos_threshold = 0.2
+    pos_threshold = 1.0
     yaw_threshold = np.deg2rad(5)
 
     waypoints = [(x, y, yaw)]
@@ -297,7 +297,7 @@ def generate_s_curve_waypoints(
     waypoints = []
     for x_local, y_local, yaw_local in zip(x_vals, y_vals, yaws):
         x_global = cos_a * x_local - sin_a * y_local + start_x/2
-        y_global = sin_a * x_local + cos_a * y_local + start_y
+        y_global = sin_a * x_local + cos_a * y_local + start_y*2
         yaw_global = normalize_angle(yaw_local + angle)
         waypoints.append((x_global, y_global, yaw_global))
     return waypoints

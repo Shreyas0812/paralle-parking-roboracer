@@ -95,7 +95,7 @@ def generate_launch_description():
                 {"extrapolated_path_topic": extrapolated_path_topic},
                 {"wp1_dist_thresh": 0.5},
                 {"wp2_dist_thresh": 0.2},
-                {"wp1_angle_thresh": 0.34},
+                {"wp1_angle_thresh": 3.14},
                 {"wp2_angle_thresh": 0.15},
                 {"switch_wp_index": 1}
             ]

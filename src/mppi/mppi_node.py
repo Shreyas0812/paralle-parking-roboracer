@@ -101,10 +101,13 @@ class MPPI_Node(Node):
         self.occup_pos = None
 
         # Traj thres
-        self.filtered_thres = 0.5 # m
-        self.pos_thres = 0.1 # m
+        self.filtered_thres_forward = 0.4 # m
+        self.filtered_thres_reverse = 0.1 # m
+        self.pos_thres = 0.15 # m
         self.yaw_thres = 0.1 # rad
         self.waiting_for_traj = False
+        self.max_steering_angle_forward = 0.5 # rad
+        self.max_steering_angle_reverse = 0.2 # rad
 
     def traj_callback(self, traj_msg):
         if self.track is None or self.infer_env is None or self.mppi is None:
@@ -113,6 +116,7 @@ class MPPI_Node(Node):
             # Convert the trajectory to a numpy array
             trajectory = poses_to_xyyaw(trajectory)
             self.end_pose = pose_to_xyyaw(end_pose)
+            self.get_logger().info(f"Received trajectory with {trajectory.shape[0]} points.")
             self.publish_traj_marker(trajectory, frame_id="map")
             
             self.track, self.config = Track.load_traj(trajectory, self.config)
@@ -160,8 +164,6 @@ class MPPI_Node(Node):
 
         self.traj_marker_pub.publish(marker)
 
-
-    # @TODO: add a callback for the laser scan data and get the scan data from obstacles to add the cost to the MPPI
     def grid_callback(self, grid_msg):
         if self.width is None or self.height is None or self.resolution is None or self.origin is None:
             self.width = grid_msg.info.width
@@ -211,6 +213,17 @@ class MPPI_Node(Node):
         out = np.vstack([obstacles, extras])
 
         return out
+    
+    def is_goal_in_front(self, state, end_pos):
+        current_pos = state[:2]
+        current_yaw = state[4]
+        to_goal = np.array(end_pos[:2]) - np.array(current_pos[:2])
+        to_goal_norm = to_goal / (np.linalg.norm(to_goal) + 1e-6)
+        # to car coordinates
+        heading = np.array([np.cos(current_yaw), np.sin(current_yaw)])
+        dot = heading @ to_goal_norm
+
+        return dot > 0  # True = in front, False = behind
 
     def filtering_roi_obstacles(self, state, obstacle_world_coords, roi_area=(2.0, 2.0), max_obstacles=200):
         '''
@@ -323,7 +336,7 @@ class MPPI_Node(Node):
         x_diff = state[0] - end_pose[0]
         y_diff = state[1] - end_pose[1]
         dist = np.sqrt(x_diff**2 + y_diff**2)
-        self.get_logger().info(f"dist: {dist}")
+        self.get_logger().info(f"state: {state}, end_pose: {end_pose}, dist: {dist}", throttle_duration_sec=1.0)
         yaw_diff = np.abs(state[4] - end_pose[2])
         if dist < self.pos_thres:
             return True
@@ -341,7 +354,7 @@ class MPPI_Node(Node):
         if not self.map_received:
             self.get_logger().warning("Waiting for map data...")
             return
-        elif self.mppi is None or self.waiting_for_traj:
+        elif self.mppi is None:
             self.get_logger().warning("Waiting for the trajectory.")
             return
 
@@ -358,7 +371,7 @@ class MPPI_Node(Node):
         euler = tf_transformations.euler_from_quaternion(quaternion)
 
         # Extract the Z-angle (yaw)
-        theta = euler[2]  # Yaw is the third element
+        theta = euler[2]
 
         state_c_0 = np.asarray([
             pose.position.x,
@@ -369,25 +382,41 @@ class MPPI_Node(Node):
             twist.angular.z,
             beta,
         ])
-
         if self.check_is_traj_done(state_c_0, self.end_pose):
             self.mppi = None
             self.control = np.asarray([0.0, 0.0])
+            max_steering_angle = 0.0
             self.get_logger().info("Trajectory done, stopping the MPPI.")
+
         else:
             filtered_obstacles = self.filtering_roi_obstacles(state_c_0, self.occup_pos)
             self.publish_obstacle_points(filtered_obstacles)
-            
-            find_waypoint_vel = max(self.config.ref_vel, twist.linear.x)
-            find_waypoint_vel = np.clip(find_waypoint_vel, 0.0, self.config.ref_vel)
-            reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), find_waypoint_vel, self.config.n_steps)
+            curr_speed = twist.linear.x
+            if self.is_goal_in_front(state_c_0, self.end_pose):
+                filtered_thres = self.filtered_thres_forward
+                find_waypoint_vel = max(self.config.ref_vel, twist.linear.x)
+                find_waypoint_vel =  np.clip(find_waypoint_vel, 0.0, self.config.ref_vel)
+                reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(
+                    state_c_0.copy(), find_waypoint_vel, self.config.n_steps)
+                max_steering_angle = self.max_steering_angle_forward
+                # curr_speed = twist.linear.x
+            else:
+                filtered_thres = self.filtered_thres_reverse
+                state_c_0[3] = min(twist.linear.x, -self.config.init_vel)
+                find_waypoint_vel = min(-self.config.ref_vel, twist.linear.x)
+                find_waypoint_vel =  np.clip(find_waypoint_vel, -self.config.ref_vel, 0.0)
+                reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(
+                    state_c_0.copy(), find_waypoint_vel, self.config.n_steps, reverse=True)
+                max_steering_angle = self.max_steering_angle_reverse
+                # curr_speed = -twist.linear.x
+
             # Doing filtering and help mppi to not get stucked in oscillations
             distances = np.linalg.norm(reference_traj[:, :2] - self.end_pose[:2], axis=1)
-            num_within = np.sum(distances < self.filtered_thres)
+            num_within = np.sum(distances < filtered_thres)
             # If at least half are close to the goal
             if num_within >= (self.config.n_steps // 2):
                 reference_traj = np.tile(self.end_pose, (self.config.n_steps, 1))
-            if np.any(distances < self.filtered_thres):
+            if np.any(distances < filtered_thres):
                 reference_traj = np.tile(self.end_pose, (self.config.n_steps + 1, 1))
             ## MPPI call
             self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj), jnp.asarray(filtered_obstacles))
@@ -395,7 +424,7 @@ class MPPI_Node(Node):
             mppi_control = numpify(self.mppi.a_opt[0]) * self.config.norm_params[0, :2]/2
             # print(f"mppi_control: {mppi_control}")
             self.control[0] = float(mppi_control[0]) * self.config.sim_time_step + self.control[0]
-            self.control[1] = float(mppi_control[1]) * self.config.sim_time_step + twist.linear.x
+            self.control[1] = float(mppi_control[1]) * self.config.sim_time_step + curr_speed
             
             if self.reference_pub.get_subscription_count() > 0:
                 ref_traj_cpu = numpify(reference_traj)
@@ -418,8 +447,8 @@ class MPPI_Node(Node):
         drive_msg = AckermannDriveStamped()
         drive_msg.header.stamp = self.get_clock().now().to_msg()
         drive_msg.header.frame_id = "base_link"
-        drive_msg.drive.steering_angle = self.control[0]
-        drive_msg.drive.speed = self.control[1]
+        drive_msg.drive.steering_angle = np.clip(self.control[0], -max_steering_angle, max_steering_angle)
+        drive_msg.drive.speed = np.clip(self.control[1], -self.config.ref_vel, self.config.ref_vel)
         # self.get_logger().info(f"Steering Angle: {drive_msg.drive.steering_angle}, Speed: {drive_msg.drive.speed}")
         self.drive_pub.publish(drive_msg)
 
