@@ -98,10 +98,6 @@ class TrajGen(Node):
 
             # Always go to wp1 first
             if self.gotowp1:        
-                
-                
-
-
 
                 # Check if the car is close to the first waypoint
                 if dist_to_wp1 < self.wp1_dist_thresh and abs(angle_to_wp) < self.wp1_angle_thresh:
@@ -119,7 +115,7 @@ class TrajGen(Node):
                     self.gotowp1 = True
                     return
                 ####################################################################################
-                
+
                 # Check if the car is Parked
                 if dist_to_wp2 < self.wp2_dist_thresh and abs(angle_to_wp2) < self.wp2_angle_thresh:
                     self.parked = True
