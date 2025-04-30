@@ -296,8 +296,8 @@ def generate_s_curve_waypoints(
     sin_a = np.sin(1.5*angle)
     waypoints = []
     for x_local, y_local, yaw_local in zip(x_vals, y_vals, yaws):
-        x_global = cos_a * x_local - sin_a * y_local + start_x/2
-        y_global = sin_a * x_local + cos_a * y_local + start_y*2
+        x_global = cos_a * x_local - sin_a * y_local + start_x +0.5
+        y_global = sin_a * x_local + cos_a * y_local + start_y
         yaw_global = normalize_angle(yaw_local + angle)
         waypoints.append((x_global, y_global, yaw_global))
     return waypoints
