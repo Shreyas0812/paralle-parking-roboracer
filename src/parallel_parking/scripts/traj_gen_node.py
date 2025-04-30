@@ -136,6 +136,8 @@ class TrajGen(Node):
             pose.orientation = Quaternion()
 
             path.traj.append(pose)
+            if i == len(extrapolated_waypoints) - 1:
+                path.end_pose = pose
         
         # if not self.switched_path:
         #     for i, wp in enumerate(self.wp_rest):
