@@ -29,7 +29,7 @@ class VisualizeNode(Node):
         super().__init__("visualize_node")
         self.get_logger().info("Visualize Node Launched")
 
-        self.declare_parameter('waypoint_file_name', 'waypoints_park1.csv')
+        self.declare_parameter('waypoint_file_name', 'waypoints_park2.csv')
         self.declare_parameter('visualize_wp_topic', '/visualization/waypoints')
         self.declare_parameter('extrapolated_path_topic', '/extrapolated_path')
         self.declare_parameter('visualize_extrapolated_wp_topic', '/visualization/extrapolated_path')

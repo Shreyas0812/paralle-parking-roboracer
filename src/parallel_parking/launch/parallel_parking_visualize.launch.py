@@ -3,7 +3,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
-    waypoint_file_name = "waypoints_park1.csv"
+    waypoint_file_name = "waypoints_park2.csv"
     
     scan_topic = "/scan"
     pose_topic = "/ego_racecar/odom"
@@ -80,6 +80,7 @@ def generate_launch_description():
             name="traj_gen_node",
             output="screen",
             parameters=[
+                {waypoint_file_name: waypoint_file_name},
                 {"pose_topic": pose_topic}
             ]
         ),
