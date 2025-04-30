@@ -220,41 +220,85 @@ def generateAckermannWaypoints(
         
     return waypoints
 
-import numpy as np
+# def generate_s_curve_waypoints(
+#     start_x, start_y, goal_x, goal_y, num_points=50, epsilon=0.01
+# ):
+#     """
+#     Generate waypoints along an S-shaped sigmoid curve from start to goal.
+#     Returns: list of (x, y, yaw) tuples
+#     """
+#     # Ensure start_x < goal_x for parameterization
+#     if goal_x < start_x:
+#         start_x, goal_x = goal_x, start_x
+#         start_y, goal_y = goal_y, start_y
+
+#     # Sigmoid parameters
+#     L = start_y
+#     U = goal_y
+
+#     # Steepness parameter for sigmoid
+#     k = 2 * np.log((1 - epsilon) / epsilon) / (goal_x - start_x)
+#     x0 = (start_x + goal_x) / 2
+
+#     def sigmoid(x):
+#         return 1 / (1 + np.exp(-k * (x - x0)))
+
+#     def y_curve(x):
+#         return L + (U - L) * sigmoid(x)
+
+#     # Sample points between start_x and goal_x
+#     x_vals = np.linspace(start_x, goal_x, num_points)
+#     y_vals = y_curve(x_vals)
+
+#     # Compute yaw (heading) at each point using the derivative
+#     dy_dx = np.gradient(y_vals, x_vals)
+#     yaws = np.arctan2(dy_dx, 1.0)
+
+#     waypoints = [(float(x), float(y), float(yaw)) for x, y, yaw in zip(x_vals, y_vals, yaws)]
+#     return waypoints
+
 
 def generate_s_curve_waypoints(
-    start_x, start_y, goal_x, goal_y, num_points=50, epsilon=0.01
+    start_x, start_y, goal_x, goal_y, start_yaw=0.0, goal_yaw=0.0, num_points=50, invert=False, epsilon=0.01
 ):
     """
-    Generate waypoints along an S-shaped sigmoid curve from start to goal.
-    Returns: list of (x, y, yaw) tuples
+    Generate S-curve waypoints from start to goal, aligned with start and goal pose.
+    Returns: list of (x, y, yaw) tuples in global frame.
     """
-    # Ensure start_x < goal_x for parameterization
-    if goal_x < start_x:
-        start_x, goal_x = goal_x, start_x
-        start_y, goal_y = goal_y, start_y
+    # Compute local vector from start to goal
+    dx = goal_x - start_x
+    dy = goal_y - start_y
+    distance = np.hypot(dx, dy)
+    angle = np.arctan2(dy, dx)
 
-    # Sigmoid parameters
-    L = start_y
-    U = goal_y
+    # Generate S-curve in local frame (from (0,0) to (distance, 0))
+    x_vals = np.linspace(0, distance, num_points)
+    # S-curve in y: goes from 0 to 0, with S-shape in between
+    k = 2 * np.log((1 - epsilon) / epsilon) / distance
+    x0 = distance / 2
 
-    # Steepness parameter for sigmoid
-    k = 2 * np.log((1 - epsilon) / epsilon) / (goal_x - start_x)
-    x0 = (start_x + goal_x) / 2
+    # S-curve: y = amplitude * (sigmoid(x) - 0.5)
+    amplitude = distance / 3  # Adjust for how "curvy" you want it
+    if invert:
+        amplitude = -amplitude
 
     def sigmoid(x):
         return 1 / (1 + np.exp(-k * (x - x0)))
 
-    def y_curve(x):
-        return L + (U - L) * sigmoid(x)
+    y_vals = amplitude * (sigmoid(x_vals) - 0.5) * 2  # Range: -amplitude to +amplitude
 
-    # Sample points between start_x and goal_x
-    x_vals = np.linspace(start_x, goal_x, num_points)
-    y_vals = y_curve(x_vals)
-
-    # Compute yaw (heading) at each point using the derivative
+    # Compute yaw at each point (tangent angle)
     dy_dx = np.gradient(y_vals, x_vals)
     yaws = np.arctan2(dy_dx, 1.0)
 
-    waypoints = [(float(x), float(y), float(yaw)) for x, y, yaw in zip(x_vals, y_vals, yaws)]
+    # Now rotate and translate to global frame
+    cos_a = np.cos(angle)
+    sin_a = np.sin(angle)
+    waypoints = []
+    for x_local, y_local, yaw_local in zip(x_vals, y_vals, yaws):
+        x_global = cos_a * x_local - sin_a * y_local + start_x
+        y_global = sin_a * x_local + cos_a * y_local + start_y
+        yaw_global = normalize_angle(yaw_local + angle)
+        waypoints.append((x_global, y_global, yaw_global))
     return waypoints
+

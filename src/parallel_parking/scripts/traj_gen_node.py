@@ -129,6 +129,19 @@ class TrajGen(Node):
 
                     extrapolated_waypoints = generate_s_curve_waypoints(start_x=pos_x, start_y=pos_y, goal_x=self.wp2[0], goal_y=self.wp2[1])
 
+                    # extrapolated_waypoints = generate_s_curve_waypoints(
+                    #     start_x=pos_x,
+                    #     start_y=pos_y,
+                    #     goal_x=self.wp2[0],
+                    #     goal_y=self.wp2[1],
+                    #     start_yaw=yaw,
+                    #     goal_yaw=self.wp2[2] if len(self.wp2) > 2 else 0.0,
+                    #     num_points=50,
+                    #     invert=False  # Set to True or False as needed to match the desired S direction
+                    # )
+
+
+
             self.publish_extrapolated_path(extrapolated_waypoints)
         else:
             self.get_logger().info("Car is parked, no need to follow the waypoints anymore.", throttle_duration_sec=1.0)
