@@ -16,7 +16,7 @@ import os
 import numpy as np
 from transforms3d.euler import quat2euler
 
-from parallel_parking.utils import load_waypoints, generateAckermannWaypoints
+from parallel_parking.utils import load_waypoints, generateAckermannWaypoints, normalize_angle
 
 class TrajGen(Node):
     def __init__(self):
@@ -28,8 +28,8 @@ class TrajGen(Node):
         self.declare_parameter('extrapolated_path_topic', '/extrapolated_path')
         self.declare_parameter('wp1_dist_thresh', 0.5)
         self.declare_parameter('wp2_dist_thresh', 0.5)
-        self.declare_parameter('wp1_angle_thresh', 0.1)
-        self.declare_parameter('wp2_angle_thresh', 0.1)
+        self.declare_parameter('wp1_angle_thresh', 0.34)
+        self.declare_parameter('wp2_angle_thresh', 0.15)
         self.declare_parameter('switch_wp_index', 1)
 
         package_share_dir = get_package_share_directory("parallel_parking")
@@ -45,9 +45,14 @@ class TrajGen(Node):
         waypoint_file_path = os.path.join(package_share_dir, 'config', waypoint_file_name)
         waypoints = np.array(load_waypoints(waypoint_file_path))
 
+        # self.wp1 = waypoints[0]
+        # self.wp_rest = waypoints[1:-1]
+        # self.wp2 = waypoints[-1]
+
         self.wp1 = waypoints[0]
-        self.wp_rest = waypoints[1:-1]
-        self.wp2 = waypoints[-1]
+        self.wp2 = waypoints[1]
+        self.wp3 = waypoints[2]
+    
 
         qos_pos = QoSProfile(depth=10)
 
@@ -60,7 +65,15 @@ class TrajGen(Node):
         # Publishers
         self.extrapolated_path_publisher_ = self.create_publisher(Traj, extrapolated_path_topic, qos_profile)
 
-        self.switched_path = False
+
+        self.gotowp1 = True
+
+        self.parked = False
+
+    # def waypoint_to_follow(self, cur_wp):
+    #     dis
+
+
 
     def pose_callback(self, msg):
         pos_x = msg.pose.pose.position.x
@@ -75,10 +88,42 @@ class TrajGen(Node):
         euler_angles = quat2euler([qw, qx, qy, qz])
         yaw = euler_angles[2]
 
-        # Points from goal to the start
-        reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp1[0], start_y=self.wp1[1], start_yaw=self.wp1[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
+        if not self.parked:
+            # Distances to the waypoints
+            dist_to_wp1 = np.sqrt((pos_x - self.wp1[0])**2 + (pos_y - self.wp1[1])**2)
+            angle_to_wp = normalize_angle(np.arctan2(self.wp1[1] - pos_y, self.wp1[0] - pos_x) - yaw)
 
-        self.publish_extrapolated_path(reversed_extrapolated_pts)
+            dist_to_wp2 = np.sqrt((pos_x - self.wp2[0])**2 + (pos_y - self.wp2[1])**2)
+            angle_to_wp2 = normalize_angle(np.arctan2(self.wp2[1] - pos_y, self.wp2[0] - pos_x) - yaw)
+
+
+            # Always go to wp1 first
+            if self.gotowp1:        
+                # Check if the car is close to the first waypoint
+                if dist_to_wp1 < self.wp1_dist_thresh and abs(angle_to_wp) < self.wp1_angle_thresh:
+                    self.gotowp1 = False
+                    return
+                
+                reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp1[0], start_y=self.wp1[1], start_yaw=self.wp1[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
+                extrapolated_waypoints = reversed_extrapolated_pts[::-1]
+                
+            else:
+                # Check if the car is Parked
+                if dist_to_wp2 < self.wp2_dist_thresh and abs(angle_to_wp2) < self.wp2_angle_thresh:
+                    self.parked = True
+                    return
+                elif dist_to_wp2 < self.wp2_dist_thresh: # Only distance is satisfied, not yaw we go to wp3
+                    reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp3[0], start_y=self.wp3[1], start_yaw=self.wp3[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
+                    extrapolated_waypoints = reversed_extrapolated_pts[::-1]
+                else: # if the car is not close to the second waypoint, we go to the second waypoint
+                    reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp2[0], start_y=self.wp2[1], start_yaw=self.wp2[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
+                    extrapolated_waypoints = reversed_extrapolated_pts[::-1]
+            self.publish_extrapolated_path(extrapolated_waypoints)
+
+
+        else:
+            self.get_logger().info("Car is parked, no need to follow the waypoints anymore.")
+            
 
     def publish_extrapolated_path(self, extrapolated_waypoints):
         path = Traj()
