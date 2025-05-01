@@ -1,0 +1,4 @@
+SLAM:
+ros2 launch slam_toolbox online_async_launch.py use_sim_time:=false slam_params_file:=/home/nvidia/parallel-parking-roboracer/src/f1tenth_system/f1tenth_stack/config/f1tenth_online_async.yaml
+
+

@@ -343,17 +343,19 @@ def vehicle_dynamics_st(x, u_init, mu=1.0, C_Sf=20.898, C_Sr=20.898,
 
     # else:
     # system dynamics
-    f = jnp.array([x[3]*jnp.cos(x[6] + x[4]),
-        x[3]*jnp.sin(x[6] + x[4]),
+    v = jnp.clip(x[3], 1e-3, None)
+    f = jnp.array([
+        v*jnp.cos(x[6] + x[4]),
+        v*jnp.sin(x[6] + x[4]),
         u[0],
         u[1],
         x[5],
-        -mu*m/(x[3]*I*(lr+lf))*(lf**2*C_Sf*(g*lr-u[1]*h) + lr**2*C_Sr*(g*lf + u[1]*h))*x[5] \
+        -mu*m/(v*I*(lr+lf))*(lf**2*C_Sf*(g*lr-u[1]*h) + lr**2*C_Sr*(g*lf + u[1]*h))*x[5] \
             +mu*m/(I*(lr+lf))*(lr*C_Sr*(g*lf + u[1]*h) - lf*C_Sf*(g*lr - u[1]*h))*x[6] \
             +mu*m/(I*(lr+lf))*lf*C_Sf*(g*lr - u[1]*h)*x[2],
-        (mu/(x[3]**2*(lr+lf))*(C_Sr*(g*lf + u[1]*h)*lr - C_Sf*(g*lr - u[1]*h)*lf)-1)*x[5] \
-            -mu/(x[3]*(lr+lf))*(C_Sr*(g*lf + u[1]*h) + C_Sf*(g*lr-u[1]*h))*x[6] \
-            +mu/(x[3]*(lr+lf))*(C_Sf*(g*lr-u[1]*h))*x[2]])
+        (mu/(v**2*(lr+lf))*(C_Sr*(g*lf + u[1]*h)*lr - C_Sf*(g*lr - u[1]*h)*lf)-1)*x[5] \
+            -mu/(v*(lr+lf))*(C_Sr*(g*lf + u[1]*h) + C_Sf*(g*lr-u[1]*h))*x[6] \
+            +mu/(v*(lr+lf))*(C_Sf*(g*lr-u[1]*h))*x[2]])
     # return f
     return jax.lax.select(jnp.abs(x[3]) < 1, f_ks, f)
 

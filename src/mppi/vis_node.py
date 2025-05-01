@@ -45,7 +45,6 @@ class Visualizer_Node(Node):
         reference_msg = self.waypoints_to_markerArray(reference_arr, self.reference_max_num, 0, 1, r=0.0, g=0.0, b=1.0)
         self.reference_pub.publish(reference_msg)
         
-        
     def frenet_pose_callback(self, arr_msg):
         reference_arr = to_numpy_f32(arr_msg)
         

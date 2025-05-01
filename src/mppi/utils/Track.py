@@ -105,14 +105,10 @@ class Track:
         track: Track
             track object
         """
-        # assert (
-        #     waypoints.shape[1] >= 7
-        # ), "expected waypoints as [s, x, y, psi, k, vx, ax]"
-        print(hasattr(config, 'wpt_xind'), hasattr(config, 'wpt_yind'), hasattr(config, 'wpt_sind'))
         wpt_sind = config.wpt_sind if hasattr(config, 'wpt_sind') else None
         wpt_xind = config.wpt_xind if hasattr(config, 'wpt_xind') else None
         wpt_yind = config.wpt_yind if hasattr(config, 'wpt_yind') else None
-        wpt_yawind = config.wpt_yawind if hasattr(config, 'wpt_yawind') else None
+        wpt_yawind = config.wpt_thind if hasattr(config, 'wpt_thind') else None
         wpt_ksind = config.wpt_ksind if hasattr(config, 'wpt_ksind') else None
         wpt_vxind = config.wpt_vxind if hasattr(config, 'wpt_vxind') else None
         wpt_axind = config.wpt_axind if hasattr(config, 'wpt_axind') else None
@@ -139,7 +135,7 @@ class Track:
             waypoints[:, 4] = ks if ks is not None else np.zeros(waypoints.shape[0])[::downsample_step]
             waypoints[:, 5] = vxs if vxs is not None else np.zeros(waypoints.shape[0])[::downsample_step]
             waypoints[:, 6] = axs if axs is not None else np.zeros(waypoints.shape[0])[::downsample_step]
-        
+
         tr_lefts = None
         tr_rights = None
         if waypoints.shape[1] == 9:
@@ -509,6 +505,22 @@ class Track:
         return self.centerline.calc_curvature_jax(s)
         # return self.centerline.find_curvature_jax(s)
     
+    @staticmethod
+    def load_traj(traj_data, config, scale=1, reverse=False, downsample_step=1):
+        """
+        loads waypoints
+        """
+        waypoints = traj_data
+        if reverse: # NOTE: reverse map
+            waypoints = waypoints[::-1]
+        waypoints[:, 1] = waypoints[:, 1] * scale
+        waypoints[:, 0] = waypoints[:, 0] * scale
+
+        track = Track.from_numpy(waypoints, config, config.s_frame_max, downsample_step)
+        track.waypoints_distances = np.linalg.norm(track.waypoints[1:, (1, 2)] - track.waypoints[:-1, (1, 2)], axis=1)
+
+        return track, config
+
     @staticmethod
     def load_map(MAP_DIR, map_info, map_ind, config, scale=1, reverse=False, downsample_step=1):
         """

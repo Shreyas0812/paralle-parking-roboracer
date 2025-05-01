@@ -29,7 +29,7 @@ class VisualizeNode(Node):
         super().__init__("visualize_node")
         self.get_logger().info("Visualize Node Launched")
 
-        self.declare_parameter('waypoint_file_name', 'waypoints_park1.csv')
+        self.declare_parameter('waypoint_file_name', 'waypoints_park2.csv')
         self.declare_parameter('visualize_wp_topic', '/visualization/waypoints')
         self.declare_parameter('extrapolated_path_topic', '/extrapolated_path')
         self.declare_parameter('visualize_extrapolated_wp_topic', '/visualization/extrapolated_path')
@@ -114,36 +114,8 @@ class VisualizeNode(Node):
         
         marker.lifetime.sec = 1
 
-        arrow_marker = Marker()
-        arrow_marker.header = marker.header
-        arrow_marker.id = 4201
-        arrow_marker.type = Marker.ARROW
-        arrow_marker.action = Marker.ADD
-        arrow_marker.scale = Vector3(x=0.3, y=0.15, z=0.1)
-        arrow_marker.color = ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0)
-
-
-
-        if len(msg.traj) > 0:
-
-            p1 = msg.traj[-2].position
-            p2 = msg.traj[-1].position
-
-            arrow_marker.pose.position.x = p2.x
-            arrow_marker.pose.position.y = p2.y
-            arrow_marker.pose.position.z = 0.2
-
-            dx = p2.x - p1.x
-            dy = p2.y - p1.y
-            angle = np.arctan2(dy, dx)
-
-            arrow_marker.pose.orientation.z = np.sin(angle / 2.0)
-            arrow_marker.pose.orientation.w = np.cos(angle / 2.0)
-
         marker_array = MarkerArray()
         marker_array.markers.append(marker)
-        if len(msg.traj) > 2:
-            marker_array.markers.append(arrow_marker)
         
         self.extrapolated_path_marker_publisher_.publish(marker_array)
 

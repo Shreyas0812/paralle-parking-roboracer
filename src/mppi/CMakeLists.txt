@@ -16,6 +16,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros)
+find_package(parallel_parking_interfaces REQUIRED)
 
 
 # Python
@@ -34,7 +35,7 @@ install(DIRECTORY dynamics_models utils
 )
 
 # yaml
-install(FILES config.yaml config_new_map.yaml config_map_edited.yaml
+install(FILES config.yaml config_new_map.yaml config_map_edited.yaml config_park.yaml
   DESTINATION share/${PROJECT_NAME}
 )
 
