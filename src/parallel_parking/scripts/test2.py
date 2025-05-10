@@ -249,7 +249,7 @@ def visualize_gaps(binary_map, gap_threshold, upper_threshold):
 
 
     cv2.circle(vis, tuple(center_point), 1, (0, 0, 255), -1)
-    cv2.circle(vis, tuple(shifted_point1), 1, (0, 255, 255), -1)
+    cv2.circle(vis, tuple(shifted_point1), 1, (0, 0, 255), -1)
     cv2.circle(vis, tuple(shifted_point2), 1, (0, 0, 255), -1)
     cv2.circle(vis, tuple(outer_waypoint1), 1, (0, 0, 255), -1)
     cv2.circle(vis, tuple(outer_waypoint2), 1, (0, 0, 255), -1)
