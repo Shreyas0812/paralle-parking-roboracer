@@ -68,7 +68,14 @@ class VisualizeNode(Node):
     def visualize_waypoints(self):
         marker_array = MarkerArray()
         for i, wp in enumerate(self.waypoints):
-            x, y, yaw, qw, qx, qy, qz = wp
+            try:
+                x, y, yaw, qw, qx, qy, qz = wp
+            except:
+                x, y, yaw = wp
+                qw = 1.0
+                qx = 0.0
+                qy = 0.0
+                qz = 0.0
 
             marker = Marker()
             marker.header = Header()
