@@ -6,7 +6,7 @@ def generate_launch_description():
     waypoint_file_name = "waypoints_park1.csv"
     
     scan_topic = "/scan"
-    pose_topic = "/ego_racecar/odom"
+    pose_topic = "pf/pose/odom"
     visualize_wp_topic = "/visualization/waypoints"
     next_wp_topic = "/next_waypoint"
     original_map_topic = "/map"
