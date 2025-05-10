@@ -145,7 +145,6 @@ class Track:
             tr_rights=None
             tr_lefts=None
         refline = CubicSplineND(xs, ys, yaws, ks, vxs, axs)
-
         return Track(
             xs=xs,
             ys=ys,

@@ -221,6 +221,7 @@ def generateAckermannWaypoints(
     return waypoints
 
 def generate_s_curve_waypoints(
+<<<<<<< Updated upstream
     start_x, start_y, goal_x, goal_y, num_points=50, epsilon=0.01
 ):
     """
@@ -258,6 +259,61 @@ def generate_s_curve_waypoints(
     return waypoints
 
 
+=======
+    start_x, start_y,
+    goal_x,  goal_y,
+    num_points=50,
+    epsilon=1e-2,
+    horizontal_first=True
+):
+    """
+    Generate waypoints along an S-shaped sigmoid curve.
+
+    If horizontal_first is False (default):
+        1. x is the parameter we sample,  y = f(x)
+        2. The vehicle starts heading roughly along +x  (horizontal).
+
+    If horizontal_first is True:
+        1. y is the parameter we sample,  x = f(y)
+        2. The vehicle starts heading roughly along +y  (vertical).
+
+    Returns
+    waypoints : list[(float, float, float)]
+        Tuples of (x, y, yaw) in radians.
+    """
+
+    def build_sigmoid(L, U, p_min, p_max, p):
+        k  = 2.0 * np.log((1 - epsilon) / epsilon) / (p_max - p_min)
+        p0 = 0.5 * (p_min + p_max)
+        sigma = 1.0 / (1.0 + np.exp(-k * (p - p0)))
+        return L + (U - L) * sigma
+
+    if horizontal_first is False:
+        # sample x from start_x ➜ goal_x
+        x_vals = np.linspace(start_x, goal_x, num_points)
+        y_vals = build_sigmoid(start_y, goal_y, start_x, goal_x, x_vals)
+
+        # dy/dx
+        dy_dx = np.gradient(y_vals, x_vals)
+        yaws  = np.arctan2(dy_dx, 1.0)       # (dx,dy) ≈ (1,dy/dx)
+
+    else:                                    # horizontal‑first variant
+        # sample y from start_y ➜ goal_y
+        y_vals = np.linspace(start_y, goal_y, num_points)
+        x_vals = build_sigmoid(start_x, goal_x, start_y, goal_y, y_vals)
+
+        # dx/dy
+        dx_dy = np.gradient(x_vals, y_vals)
+        yaws  = np.arctan2(1.0, dx_dy)       # (dx,dy) ≈ (dx/dy,1)
+
+    waypoints = [
+        (float(x), float(y), float(yaw))
+        for x, y, yaw in zip(x_vals, y_vals, yaws)
+    ]
+    return waypoints
+
+### work for top slot
+>>>>>>> Stashed changes
 # def generate_s_curve_waypoints(
 #     start_x, start_y, goal_x, goal_y, start_yaw=0.0, goal_yaw=0.0, num_points=50, invert=False, epsilon=0.01
 # ):

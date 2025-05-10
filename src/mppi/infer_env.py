@@ -101,16 +101,16 @@ class InferEnv():
         # jax.debug.print('vel_cost: {}', vel_cost)
         yaw_cost = -jnp.abs(jnp.sin(reference[1:, 3]) - jnp.sin(state[:, 4])) - \
             jnp.abs(jnp.cos(reference[1:, 4]) - jnp.cos(state[:, 4]))
-        cost += yaw_cost * 0.0
+        cost += yaw_cost * 20.0
         # jax.debug.print('yaw_cost: {}', yaw_cost)
         if obstacles is not None:
             pos = state[:, :2]                         # (n_steps, 2)
             diffs = pos[:, None, :] - obstacles[None, :, :]  # (n_steps, n_obs, 2)
             sqd = diffs[..., 0]**2 + diffs[..., 1]**2         # (n_steps, n_obs)
             d2 = jnp.min(sqd, axis=1)                         # (n_steps,)
-            obs_cost = -1.0 / (d2**2 + 1e-4)
+            obs_cost = -1.0 / (d2**3 + 1e-4)
             # obs_cost = jnp.clip(obs_cost, a_min=-30.0, a_max=0.0)
-            cost += obs_cost * 0.1
+            cost += obs_cost * 0.5
             # jax.debug.print('obs_cost: {}', obs_cost)
             
         # return 20*xy_cost + 15*vel_cost + 1*yaw_cost
@@ -306,7 +306,6 @@ def get_reference_trajectory(predicted_speeds, dist_from_segment_start, idx,
     interpolated_orientations = waypoints[index_absolute][:, 3] + (t * orientation_diffs)
     interpolated_orientations = (interpolated_orientations + np.pi) % (2 * np.pi) - np.pi
     interpolated_speeds = waypoints[index_absolute][:, 5] + (t * speed_diffs)
-    # print('interpolated_orientations:', interpolated_orientations)
     
     reference = np.array([
         # Sort reference trajectory so the order of reference match the order of the states
@@ -340,7 +339,7 @@ def get_reference_trajectory_backward(predicted_speeds,
     delta_s = np.ones((n_steps ,)) * predicted_speeds * DT
     s_relative = np.cumsum(np.concatenate(([0.0], delta_s)))
     s_relative = np.where(s_relative < 0, s_relative, 0.0)
-    print(f's_relative: {s_relative}')
+    # print(f's_relative: {s_relative}')
     # np.roll(..., -idx) shifts the array left so that the segment starting at your "idx" becomes the start
     # waypoints_distances_relative is cumulative distance from the start of the "idx"
     N = waypoints.shape[0] - 1

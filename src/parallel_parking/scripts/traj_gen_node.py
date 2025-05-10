@@ -155,7 +155,7 @@ class TrajGen(Node):
 
             pose = Pose()
             pose.position = Point(x=x, y=y, z=0.0)
-            pose.orientation = Quaternion()
+            pose.orientation = Quaternion(x=0.0, y=0.0, z=np.sin(yaw/2), w=np.cos(yaw/2))
 
             path.traj.append(pose)
             if i == len(extrapolated_waypoints) - 1:
