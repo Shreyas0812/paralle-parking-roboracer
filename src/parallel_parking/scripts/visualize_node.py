@@ -96,6 +96,8 @@ class VisualizeNode(Node):
 
             marker_array.markers.append(marker)
 
+            self.get_logger().info(f"Waypoint {i}: x={x}, y={y}, yaw={yaw}")
+
         self.waypoint_marker_publisher_.publish(marker_array)
         self.get_logger().info("Waypoints Visualized")
     
