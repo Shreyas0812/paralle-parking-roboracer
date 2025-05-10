@@ -100,9 +100,9 @@ def visualize_results(binary_map, gap_threshold):
     
     return parking_slots
 
-map_path = "/home/yufeiyang/Documents/paralle-parking-roboracer/maps/agh/agh300a1_smoothed.pgm"
+map_path = "/sim_ws/src/f1tenth_gym_ros/maps/park1.png"
 
 image = cv2.imread(map_path, cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(image, 127, 255, cv2.THRESH_BINARY_INV)
-gap_threshold = 20  # pixel threshold for the internal gap's width or height
+gap_threshold = 250  # pixel threshold for the internal gap's width or height
 parking_slots = visualize_results(binary, gap_threshold)

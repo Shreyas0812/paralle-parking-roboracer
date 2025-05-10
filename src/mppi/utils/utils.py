@@ -35,6 +35,7 @@ def poses_to_xyyaw(poses):
         out[i, :] = (x, y, yaw)
     return out
 
+
 def pose_to_xyyaw(p):
     """
     p: single geometry_msgs/Pose
@@ -43,6 +44,22 @@ def pose_to_xyyaw(p):
     q = p.orientation
     _, _, yaw = euler_from_quaternion([q.x, q.y, q.z, q.w])
     return np.array([p.position.x, p.position.y, yaw], dtype=float)
+
+
+# wrap a single angle to [0, 2π)
+def wrap_to_2pi(theta, offset=0.0):
+    """Wrap angle to [0, 2π) after applying a fixed offset."""
+    return (theta + offset) % (2.0 * np.pi)
+
+
+# shortest signed difference between two headings
+def angle_diff(a, b):
+    """
+    Returns the signed shortest difference between a and b in (−π, π].
+    """
+    d = (a - b + np.pi) % (2.0 * np.pi) - np.pi
+    return d
+
 
 class ConfigYAML():
     """

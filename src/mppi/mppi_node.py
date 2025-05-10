@@ -15,7 +15,7 @@ from ackermann_msgs.msg import AckermannDriveStamped
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 from parallel_parking_interfaces.msg import Traj
 from utils.ros_np_multiarray import to_multiarray_f32, to_numpy_f32
-from utils.utils import pose_to_xyyaw, poses_to_xyyaw
+from utils.utils import pose_to_xyyaw, poses_to_xyyaw, wrap_to_2pi, angle_diff
 from ament_index_python.packages import get_package_share_directory
 
 from infer_env import InferEnv
@@ -101,10 +101,10 @@ class MPPI_Node(Node):
         self.occup_pos = None
 
         # Traj thres
-        self.filtered_thres_forward = 0.4 # m
+        self.filtered_thres_forward = 0.2 # m
         self.filtered_thres_reverse = 0.1 # m
-        self.pos_thres = 0.15 # m
-        self.yaw_thres = 0.1 # rad
+        self.pos_thres = 0.2 # m
+        self.yaw_thres = 0.15 # rad
         self.waiting_for_traj = False
         self.max_steering_angle_forward = 0.5 # rad
         self.max_steering_angle_reverse = 0.2 # rad
@@ -333,12 +333,15 @@ class MPPI_Node(Node):
         Returns:
             bool: True if the trajectory is done, False otherwise
         """
-        x_diff = state[0] - end_pose[0]
-        y_diff = state[1] - end_pose[1]
-        dist = np.sqrt(x_diff**2 + y_diff**2)
-        self.get_logger().info(f"state: {state}, end_pose: {end_pose}, dist: {dist}", throttle_duration_sec=1.0)
-        yaw_diff = np.abs(state[4] - end_pose[2])
-        if dist < self.pos_thres:
+        yaw   = wrap_to_2pi(state[4])          # current heading in [0,2π)
+        yaw_r = self.end_pose[2]
+        # Smallest absolute yaw error (0 … π)
+        yaw_error = np.abs(angle_diff(yaw, yaw_r))
+        pos_error = np.linalg.norm(state[:2] - self.end_pose[:2])
+        self.get_logger().info(f"x, y, yaw: {state[:2]}, end_pose: {self.end_pose[:2]}", throttle_duration_sec=1.0)
+        self.get_logger().info(f"yaw: {yaw}, end_pose: {yaw_r}", throttle_duration_sec=1.0)
+        self.get_logger().info(f"pos_error: {pos_error}, yaw_error: {yaw_error}", throttle_duration_sec=1.0)
+        if pos_error < self.pos_thres and yaw_error < self.yaw_thres:
             return True
         return False
 
@@ -418,6 +421,8 @@ class MPPI_Node(Node):
                 reference_traj = np.tile(self.end_pose, (self.config.n_steps, 1))
             if np.any(distances < filtered_thres):
                 reference_traj = np.tile(self.end_pose, (self.config.n_steps + 1, 1))
+            
+            # self.get_logger().info(f"reference_traj yaw: {reference_traj[:, 3]}")
             ## MPPI call
             self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj), jnp.asarray(filtered_obstacles))
             # self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
@@ -453,6 +458,10 @@ class MPPI_Node(Node):
         self.drive_pub.publish(drive_msg)
 
         if self.mppi == None:
+            pos_error = np.linalg.norm(state_c_0[:2] - self.end_pose[:2])
+            self.get_logger().info(f"The pos_error is {pos_error:.2f}, the pose is {state_c_0[:2]}, the end pose is {self.end_pose[:2]}")
+            yaw_error  = np.abs(state_c_0[4] - self.end_pose[2])
+            self.get_logger().info(f"The yaw_error is {yaw_error:.2f}, the yaw is {state_c_0[4]}, the end pose is {self.end_pose[2]}")
             self.waiting_for_traj = True
         
 
