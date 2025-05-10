@@ -1,4 +1,4 @@
-# paralle-parking-roboracer
+# parallel-parking-roboracer
 
 ### Steps to run:
 
