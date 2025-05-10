@@ -8,7 +8,7 @@ def save_waypoints(waypoints, file_path):
     try:
         with open(file_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow(['x', 'y'])  # Write header
+            writer.writerow(['x', 'y', 'yaw'])  # Write header
             for waypoint in waypoints:
                 writer.writerow(waypoint)
     except Exception as e:
@@ -23,9 +23,9 @@ resolution = 0.5
 origin = (-5.13, -4.19)
 world_waypoints = []
 for waypoint in grid_waypoints:
-    grid_x, grid_y = waypoint
+    grid_x, grid_y, yaw = waypoint
     world_x, world_y = get_world_coordinates(grid_x, grid_y, origin, resolution)
-    world_waypoints.append((world_x, world_y))
+    world_waypoints.append((world_x, world_y, yaw))
     # print(f"Grid coordinates: ({grid_x}, {grid_y}) -> World coordinates: ({world_x}, {world_y})")
 
 output_file = "world_waypoints.csv"
