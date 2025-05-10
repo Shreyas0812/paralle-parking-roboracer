@@ -19,7 +19,7 @@ grid_waypoints = load_waypoints("/home/yufeiyang/Documents/paralle-parking-robor
 print(grid_waypoints)
 
 # Convert grid waypoints to world coordinates
-resolution = 0.5
+resolution = 0.05
 origin = (-5.13, -4.19)
 world_waypoints = []
 for waypoint in grid_waypoints:
