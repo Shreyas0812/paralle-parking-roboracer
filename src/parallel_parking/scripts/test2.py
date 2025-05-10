@@ -233,28 +233,29 @@ def visualize_gaps(binary_map, gap_threshold, upper_threshold):
     gaps, vis = detect_entrance_gaps(binary_map, gap_threshold, upper_threshold, debug=False)
 
     # visualize the gaps
-    for gap in gaps:
-        # Draw the depth line
-        depth_end = gap['midpoint'] + (gap['depth'] * gap['direction']).astype(int)
-        # cv2.line(vis, tuple(gap['midpoint']), tuple(depth_end), (255, 255, 0), 2)
-        
-        # Annotate with depth information
-        text_pos = ((gap['midpoint'] + depth_end) // 2).astype(int)
-        # cv2.putText(vis, f"{gap['depth']:.1f}px", tuple(text_pos), 
-        #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        shifted_point1, shifted_point2, center_point, outer_waypoint1, outer_waypoint2, outer_waypoint3, mid = find_waypoint(gap)
-        # save these points in a csv file
-
-
-        cv2.circle(vis, tuple(center_point), 1, (0, 0, 255), -1)
-        cv2.circle(vis, tuple(shifted_point1), 1, (0, 0, 255), -1)
-        cv2.circle(vis, tuple(shifted_point2), 1, (0, 0, 255), -1)
-        cv2.circle(vis, tuple(outer_waypoint1), 1, (0, 0, 255), -1)
-        cv2.circle(vis, tuple(outer_waypoint2), 1, (0, 0, 255), -1)
-        cv2.circle(vis, tuple(outer_waypoint3), 1, (0, 0, 255), -1)
-        cv2.circle(vis, tuple(mid), 1, (0, 0, 255), -1)
+    # for gap in gaps:
+    gap = gaps[1]
+    # Draw the depth line
+    depth_end = gap['midpoint'] + (gap['depth'] * gap['direction']).astype(int)
+    # cv2.line(vis, tuple(gap['midpoint']), tuple(depth_end), (255, 255, 0), 2)
     
+    # Annotate with depth information
+    text_pos = ((gap['midpoint'] + depth_end) // 2).astype(int)
+    # cv2.putText(vis, f"{gap['depth']:.1f}px", tuple(text_pos), 
+    #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+    
+    shifted_point1, shifted_point2, center_point, outer_waypoint1, outer_waypoint2, outer_waypoint3, mid = find_waypoint(gap)
+    # save these points in a csv file
+
+
+    cv2.circle(vis, tuple(center_point), 1, (0, 0, 255), -1)
+    cv2.circle(vis, tuple(shifted_point1), 1, (0, 255, 255), -1)
+    cv2.circle(vis, tuple(shifted_point2), 1, (0, 0, 255), -1)
+    cv2.circle(vis, tuple(outer_waypoint1), 1, (0, 0, 255), -1)
+    cv2.circle(vis, tuple(outer_waypoint2), 1, (0, 0, 255), -1)
+    cv2.circle(vis, tuple(outer_waypoint3), 1, (0, 0, 255), -1)
+    cv2.circle(vis, tuple(mid), 1, (0, 0, 255), -1)
+
     # Visualize results
     plt.figure(figsize=(12, 6))
     
@@ -274,7 +275,7 @@ def visualize_gaps(binary_map, gap_threshold, upper_threshold):
     print(f"Detected {len(gaps)} gaps with width > {gap_threshold}px")
     return gaps
 
-def find_waypoint(gap_info, center_offset=6, gap_offset=6):
+def find_waypoint(gap_info, center_offset=6, gap_offset=6, angle_offset=np.pi/6):
     
     depth = gap_info['depth']
     midpoint = gap_info['midpoint']
@@ -284,6 +285,10 @@ def find_waypoint(gap_info, center_offset=6, gap_offset=6):
     center_point = midpoint + (depth * direction / 2).astype(int)
     # find the direction perpendicular to the gap direction
     perpendicular_direction = np.array([-direction[1], direction[0]])
+
+    # compute the angle between perpendicular direction and the horizontal axis
+    angle = np.arctan2(perpendicular_direction[1], perpendicular_direction[0])
+    print(f"Angle: {angle} radians")
     # point alinged with the center point on the perpendicular direction but shifted
     shifted_point1 = center_point + (center_offset * perpendicular_direction).astype(int)
     shifted_point2 = center_point - (center_offset * perpendicular_direction).astype(int)
@@ -296,17 +301,19 @@ def find_waypoint(gap_info, center_offset=6, gap_offset=6):
     # modify mid such that it is alingned with shifted_point2 on the gap direction
     mid = shifted_point2 + (gap_offset * direction).astype(int)
     mid = mid + (gap_offset * direction / 2).astype(int)
-    waypoints = [shifted_point1, shifted_point2, center_point, outer_waypoint1, outer_waypoint2, outer_waypoint3, mid]
+    # waypoints = [shifted_point1, shifted_point2, center_point, outer_waypoint1, outer_waypoint2, outer_waypoint3, mid]
     # save the waypoints in a csv file in x, y. ignore names
-    with open('waypoints.csv', 'a') as f:
+    with open('waypoints.csv', 'w') as f:
         writer = csv.writer(f)
-        writer.writerow([shifted_point1[0], shifted_point1[1]])
-        writer.writerow([shifted_point2[0], shifted_point2[1]])
-        writer.writerow([center_point[0], center_point[1]])
-        writer.writerow([outer_waypoint1[0], outer_waypoint1[1]])
-        writer.writerow([outer_waypoint2[0], outer_waypoint2[1]])
-        writer.writerow([outer_waypoint3[0], outer_waypoint3[1]])
-        writer.writerow([mid[0], mid[1]])
+        writer.writerow(['x', 'y', 'yaw'])
+        writer.writerow([shifted_point1[0], shifted_point1[1], angle])
+        writer.writerow([center_point[0], center_point[1], angle])
+        writer.writerow([shifted_point2[0], shifted_point2[1], angle])
+        writer.writerow([mid[0], mid[1], angle+angle_offset])
+        writer.writerow([outer_waypoint1[0], outer_waypoint1[1], angle])
+        writer.writerow([outer_waypoint2[0], outer_waypoint2[1], angle])
+        writer.writerow([outer_waypoint3[0], outer_waypoint3[1], angle])
+        
     return shifted_point1, shifted_point2, center_point, outer_waypoint1, outer_waypoint2, outer_waypoint3, mid
 
 
