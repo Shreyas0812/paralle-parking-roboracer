@@ -231,7 +231,7 @@ def process_gap_info(gap_info, threshold=80, gap=40, dist = 40, num_waypoints=4)
 
     return slot_center, back_center, front_center, front_out, waypoints
 
-map_path = "/home/yufeiyang/Documents/paralle-parking-roboracer/src/f1tenth_gym_ros/maps/park1.png"
+map_path = "/home/yufeiyang/Documents/paralle-parking-roboracer/maps/agh/agh300a1_blacked.pgm"
 
 thresh = 80 # distance from the car end to center
 gap = 40 # distance from waypoint to the slot corner
@@ -240,7 +240,7 @@ num_waypoints = 4 # number of waypoints outside of the slot
 
 image = cv2.imread(map_path, cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(image, 127, 255, cv2.THRESH_BINARY_INV)
-gap_threshold = 300  # pixel threshold for the internal gap's width or height
+gap_threshold = 5  # pixel threshold for the internal gap's width or height
 parking_slots = visualize_results(binary, gap_threshold)
 gap_infos = []
 for i in range(len(parking_slots)):
