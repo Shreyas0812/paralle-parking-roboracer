@@ -31,7 +31,7 @@ class TrajGen(Node):
         self.declare_parameter('wp1_angle_thresh', 0.34)
         self.declare_parameter('wp2_angle_thresh', 0.15)
         self.declare_parameter('switch_wp_index', 1)
-        self.declare_parameter('generate_s_curve', False)
+        self.declare_parameter('generate_s_curve', True)
 
         package_share_dir = get_package_share_directory("parallel_parking")
 

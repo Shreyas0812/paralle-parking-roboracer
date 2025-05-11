@@ -225,7 +225,7 @@ def generate_s_curve_waypoints(
     goal_x,  goal_y,
     num_points=50,
     epsilon=1e-2,
-    horizontal_first=False
+    horizontal_first=True
 ):
     """
     Generate waypoints along an S-shaped sigmoid curve.

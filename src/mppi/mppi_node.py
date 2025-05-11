@@ -38,7 +38,7 @@ class MPPI_Node(Node):
         super().__init__('lmppi_node')
         self.config = utils.ConfigYAML()
         config_dir = get_package_share_directory('mppi')
-        config_path = os.path.join(config_dir, 'config_park.yaml')
+        config_path = os.path.join(config_dir, 'config_park_slot1.yaml')
         self.config.load_file(config_path)
         self.config.norm_params = np.array(self.config.norm_params).T
         if self.config.random_seed is None:
@@ -103,8 +103,8 @@ class MPPI_Node(Node):
         # Traj thres
         self.filtered_thres_forward = 0.2 # m
         self.filtered_thres_reverse = 0.1 # m
-        self.pos_thres = 0.5 # m
-        self.yaw_thres = 0.4 # rad
+        self.pos_thres = 0.4 # m
+        self.yaw_thres = 0.3 # rad
         self.waiting_for_traj = False
         self.max_steering_angle_forward = 0.5 # rad
         self.max_steering_angle_reverse = 0.25 # rad
