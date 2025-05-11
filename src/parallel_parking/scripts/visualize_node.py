@@ -68,8 +68,7 @@ class VisualizeNode(Node):
     def visualize_waypoints(self):
         marker_array = MarkerArray()
         for i, wp in enumerate(self.waypoints):
-            x, y, yaw = wp
-            qw, qx, qy, qz = 0.0, 0.0, 0.0, 0.0
+            x, y, yaw, qw, qx, qy, qz = wp
 
             marker = Marker()
             marker.header = Header()
@@ -89,6 +88,8 @@ class VisualizeNode(Node):
             marker.lifetime.sec = 0
 
             marker_array.markers.append(marker)
+
+            self.get_logger().info(f"Waypoint {i}: x={x}, y={y}, yaw={yaw}")
 
         self.waypoint_marker_publisher_.publish(marker_array)
         self.get_logger().info("Waypoints Visualized")
