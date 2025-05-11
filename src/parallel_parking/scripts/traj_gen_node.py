@@ -108,6 +108,8 @@ class TrajGen(Node):
                 
                 reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp1[0], start_y=self.wp1[1], start_yaw=self.wp1[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
                 extrapolated_waypoints = reversed_extrapolated_pts[::-1]
+
+                self.publish_extrapolated_path(extrapolated_waypoints, flip_yaw=True)
                 
             else:
 
@@ -125,25 +127,28 @@ class TrajGen(Node):
                 elif dist_to_wp2 < self.wp2_dist_thresh: # Only distance is satisfied, not yaw we go to wp3 to retry
                     reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp3[0], start_y=self.wp3[1], start_yaw=self.wp3[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
                     extrapolated_waypoints = reversed_extrapolated_pts[::-1]
+                    self.publish_extrapolated_path(extrapolated_waypoints)
                 else: # if the car is not close to the second waypoint, we go to the second waypoint
                     # reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp2[0], start_y=self.wp2[1], start_yaw=self.wp2[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
                     # extrapolated_waypoints = reversed_extrapolated_pts[::-1]
 
                     if self.generate_s_curve:
                         extrapolated_waypoints = generate_s_curve_waypoints(start_x=pos_x, start_y=pos_y, goal_x=self.wp2[0], goal_y=self.wp2[1])
+                        self.publish_extrapolated_path(extrapolated_waypoints)
                     else:
                         # Generate the waypoints using Ackermann model
                         reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp2[0], start_y=self.wp2[1], start_yaw=self.wp2[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
                         extrapolated_waypoints = reversed_extrapolated_pts[::-1]
+                        self.publish_extrapolated_path(extrapolated_waypoints)
 
 
 
-            self.publish_extrapolated_path(extrapolated_waypoints)
+            # self.publish_extrapolated_path(extrapolated_waypoints)
         else:
             self.get_logger().info("Car is parked, no need to follow the waypoints anymore.", throttle_duration_sec=1.0)
             
 
-    def publish_extrapolated_path(self, extrapolated_waypoints):
+    def publish_extrapolated_path(self, extrapolated_waypoints, flip_yaw=False):
         path = Traj()
 
         for i, wp in enumerate(extrapolated_waypoints):
@@ -152,6 +157,10 @@ class TrajGen(Node):
             pose = Pose()
             pose.position = Point(x=x, y=y, z=0.0)
 
+            if flip_yaw:
+                # Flip the yaw angle
+                yaw = normalize_angle(yaw + np.pi)
+
             # Convert yaw to quaternion
             qw, qx, qy, qz = euler2quat(0.0, 0.0, yaw)
             pose.orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
@@ -159,6 +168,8 @@ class TrajGen(Node):
             path.traj.append(pose)
             if i == len(extrapolated_waypoints) - 1:
                 path.end_pose = pose
+
+
         
         # if not self.switched_path:
         #     for i, wp in enumerate(self.wp_rest):
