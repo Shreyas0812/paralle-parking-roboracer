@@ -23,7 +23,7 @@ class TrajGen(Node):
         super().__init__("traj_gen_node")
         self.get_logger().info("Python traj_gen_node has been started.")
 
-        self.declare_parameter('waypoint_file_name', 'waypoints_park2.csv')
+        self.declare_parameter('waypoint_file_name', 'waypoints_park1.csv')
         self.declare_parameter("pose_topic", '/ego_racecar/odom')
         self.declare_parameter('extrapolated_path_topic', '/extrapolated_path')
         self.declare_parameter('wp1_dist_thresh', 0.5)

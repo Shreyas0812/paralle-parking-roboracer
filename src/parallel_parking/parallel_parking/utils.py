@@ -11,11 +11,11 @@ def load_waypoints(waypoint_file_path):
                 x = float(row[0])
                 y = float(row[1])
                 yaw = float(row[2])
-                # qw = float(row[3])
-                # qx = float(row[4])
-                # qy = float(row[5])
-                # qz = float(row[6])
-                waypoints.append((x, y, yaw))
+                qw = float(row[3])
+                qx = float(row[4])
+                qy = float(row[5])
+                qz = float(row[6])
+                waypoints.append((x, y, yaw, qw, qx, qy, qz))
     except Exception as e:
         print(f"Failed to read waypoints: {e}")
 
@@ -225,7 +225,7 @@ def generate_s_curve_waypoints(
     goal_x,  goal_y,
     num_points=50,
     epsilon=1e-2,
-    horizontal_first=True
+    horizontal_first=False
 ):
     """
     Generate waypoints along an S-shaped sigmoid curve.

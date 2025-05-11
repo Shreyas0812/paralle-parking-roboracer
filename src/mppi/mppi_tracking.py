@@ -47,11 +47,11 @@ class MPPI():
             self.a_cov_init = self.a_cov
             
             
-    def update(self, env_state, reference_traj, filtered_obstacles=None):
+    def update(self, env_state, reference_traj, stage_idx, filtered_obstacles=None):
         self.a_opt, self.a_cov = self.shift_prev_opt(self.a_opt, self.a_cov)
         for _ in range(self.n_iterations):
             self.a_opt, self.a_cov, self.states, self.traj_opt = self.iteration_step(
-                self.a_opt, self.a_cov, self.jrng.new_key(), env_state, reference_traj, filtered_obstacles)
+                self.a_opt, self.a_cov, self.jrng.new_key(), env_state, reference_traj, stage_idx, filtered_obstacles)
         
         if self.track is not None and self.config.state_predictor in self.config.cartesian_models:
             self.states = self.convert_cartesian_to_frenet_jax(self.states)
@@ -74,7 +74,7 @@ class MPPI():
     
     
     @partial(jax.jit, static_argnums=(0))
-    def iteration_step(self, a_opt, a_cov, rng_da, env_state, reference_traj, filtered_obstacles=None):
+    def iteration_step(self, a_opt, a_cov, rng_da, env_state, reference_traj, stage_idx, filtered_obstacles=None):
         rng_da, rng_da_split1, rng_da_split2 = jax.random.split(rng_da, 3)
         da = jax.random.truncated_normal(
             rng_da,
@@ -92,8 +92,8 @@ class MPPI():
         if self.config.state_predictor in self.config.cartesian_models:
             # jax.debug.print("states shape: {}", states.shape)
             # states shape: (n_samples, n_steps, 7)
-            reward = jax.vmap(self.env.reward_fn_xy, in_axes=(0, None, None))(
-                states, reference_traj, filtered_obstacles
+            reward = jax.vmap(self.env.reward_fn_xy, in_axes=(0, None, None, None))(
+                states, reference_traj, stage_idx, filtered_obstacles
             )
         else:
             reward = jax.vmap(self.env.reward_fn_sey, in_axes=(0, None))(

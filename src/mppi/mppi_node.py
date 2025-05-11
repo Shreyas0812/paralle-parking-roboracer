@@ -103,11 +103,13 @@ class MPPI_Node(Node):
         # Traj thres
         self.filtered_thres_forward = 0.2 # m
         self.filtered_thres_reverse = 0.1 # m
-        self.pos_thres = 0.2 # m
-        self.yaw_thres = 0.15 # rad
+        self.pos_thres = 0.5 # m
+        self.yaw_thres = 0.4 # rad
         self.waiting_for_traj = False
         self.max_steering_angle_forward = 0.5 # rad
-        self.max_steering_angle_reverse = 0.2 # rad
+        self.max_steering_angle_reverse = 0.25 # rad
+
+        self.stage_cnt = None
 
     def traj_callback(self, traj_msg):
         if self.track is None or self.infer_env is None or self.mppi is None:
@@ -116,9 +118,11 @@ class MPPI_Node(Node):
             # Convert the trajectory to a numpy array
             trajectory = poses_to_xyyaw(trajectory)
             self.end_pose = pose_to_xyyaw(end_pose)
-            self.get_logger().info(f"Received trajectory with {trajectory.shape[0]} points.")
             self.publish_traj_marker(trajectory, frame_id="map")
-            
+            if self.stage_cnt is None:
+                self.stage_cnt = 0
+            else:
+                self.stage_cnt += 1
             self.track, self.config = Track.load_traj(trajectory, self.config)
             self.infer_env = InferEnv(self.track, self.config, DT=self.config.sim_time_step)
             self.mppi = MPPI(self.config, self.infer_env, self.jrng)
@@ -126,8 +130,9 @@ class MPPI_Node(Node):
             state_c_0 = np.asarray([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
             self.control = np.asarray([0.0, 0.0])
             reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(state_c_0.copy(), self.config.ref_vel, self.config.n_steps)
-            self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
+            self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj), self.stage_cnt)
             self.waiting_for_traj = False
+            self.get_logger().info(f"Received {self.stage_cnt} trajectories with {trajectory.shape[0]} points.")
             self.get_logger().info('MPPI initialized')
 
     def publish_traj_marker(self, traj: np.ndarray, frame_id="map"):
@@ -360,7 +365,7 @@ class MPPI_Node(Node):
         elif self.mppi is None:
             self.get_logger().warning("Waiting for the trajectory.")
             return
-
+        
         pose = pose_msg.pose.pose
         twist = pose_msg.twist.twist
 
@@ -411,6 +416,7 @@ class MPPI_Node(Node):
                 reference_traj, waypoint_ind = self.infer_env.get_refernece_traj(
                     state_c_0.copy(), find_waypoint_vel, self.config.n_steps, reverse=True)
                 max_steering_angle = self.max_steering_angle_reverse
+
                 # curr_speed = -twist.linear.x
 
             # Doing filtering and help mppi to not get stucked in oscillations
@@ -424,7 +430,7 @@ class MPPI_Node(Node):
             
             # self.get_logger().info(f"reference_traj yaw: {reference_traj[:, 3]}")
             ## MPPI call
-            self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj), jnp.asarray(filtered_obstacles))
+            self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj), self.stage_cnt, jnp.asarray(filtered_obstacles))
             # self.mppi.update(jnp.asarray(state_c_0), jnp.asarray(reference_traj))
             mppi_control = numpify(self.mppi.a_opt[0]) * self.config.norm_params[0, :2]/2
             # print(f"mppi_control: {mppi_control}")
