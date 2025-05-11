@@ -31,6 +31,7 @@ class TrajGen(Node):
         self.declare_parameter('wp1_angle_thresh', 0.34)
         self.declare_parameter('wp2_angle_thresh', 0.15)
         self.declare_parameter('switch_wp_index', 1)
+        self.declare_parameter('generate_s_curve', True)
 
         package_share_dir = get_package_share_directory("parallel_parking")
 
@@ -41,6 +42,7 @@ class TrajGen(Node):
         self.wp1_angle_thresh = self.get_parameter('wp1_angle_thresh').get_parameter_value().double_value
         self.wp2_angle_thresh = self.get_parameter('wp2_angle_thresh').get_parameter_value().double_value
         self.switch_wp_index = self.get_parameter('switch_wp_index').get_parameter_value().integer_value
+        self.generate_s_curve = self.get_parameter('generate_s_curve').get_parameter_value().bool_value
          
         waypoint_file_path = os.path.join(package_share_dir, 'config', waypoint_file_name)
         waypoints = np.array(load_waypoints(waypoint_file_path))
@@ -127,18 +129,12 @@ class TrajGen(Node):
                     # reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp2[0], start_y=self.wp2[1], start_yaw=self.wp2[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
                     # extrapolated_waypoints = reversed_extrapolated_pts[::-1]
 
-                    extrapolated_waypoints = generate_s_curve_waypoints(start_x=pos_x, start_y=pos_y, goal_x=self.wp2[0], goal_y=self.wp2[1])
-
-                    # extrapolated_waypoints = generate_s_curve_waypoints(
-                    #     start_x=pos_x,
-                    #     start_y=pos_y,
-                    #     goal_x=self.wp2[0],
-                    #     goal_y=self.wp2[1],
-                    #     start_yaw=yaw,
-                    #     goal_yaw=self.wp2[2] if len(self.wp2) > 2 else 0.0,
-                    #     num_points=50,
-                    #     invert=False  # Set to True or False as needed to match the desired S direction
-                    # )
+                    if self.generate_s_curve:
+                        extrapolated_waypoints = generate_s_curve_waypoints(start_x=pos_x, start_y=pos_y, goal_x=self.wp2[0], goal_y=self.wp2[1])
+                    else:
+                        # Generate the waypoints using Ackermann model
+                        reversed_extrapolated_pts = generateAckermannWaypoints(start_x=self.wp2[0], start_y=self.wp2[1], start_yaw=self.wp2[2], goal_x=pos_x, goal_y=pos_y, goal_yaw=yaw, wheelbase=0.32, dt=0.1, max_steering_angle=0.52, velocity=-1.0)
+                        extrapolated_waypoints = reversed_extrapolated_pts[::-1]
 
 
 
