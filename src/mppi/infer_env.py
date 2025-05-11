@@ -27,6 +27,9 @@ class InferEnv():
         self.jrng = jax_utils.oneLineJaxRNG(0) if jrng is None else jrng
         self.state_frenet = jnp.zeros(6)
         self.norm_params = config.norm_params
+        self.xy_cost = jnp.asarray(self.config.xy_cost, dtype=jnp.float32)
+        self.yaw_cost = jnp.asarray(self.config.yaw_cost, dtype=jnp.float32)
+        self.obs_cost = jnp.asarray(self.config.obs_cost, dtype=jnp.float32)
         print('MPPI Model:', self.config.state_predictor)
         
         def RK4_fn(x0, u, Ddt, vehicle_dynamics_fn, args):
@@ -87,13 +90,13 @@ class InferEnv():
         self.waypoints_distances = np.linalg.norm(self.waypoints[1:, (1, 2)] - self.waypoints[:-1, (1, 2)], axis=1)
     
     @partial(jax.jit, static_argnums=(0,))
-    def reward_fn_xy(self, state, reference, obstacles=None):
+    def reward_fn_xy(self, state, reference, stage_idx, obstacles=None):
         """
         reward function for the state s with respect to the reference trajectory
         """
         cost = jnp.zeros((state.shape[0],))
         xy_cost = -jnp.linalg.norm(reference[1:, :2] - state[:, :2], ord=1, axis=1)
-        cost += xy_cost * 100.0
+        cost += xy_cost * self.xy_cost[stage_idx]
         # jax.debug.print("xy_cost: {}", xy_cost)
 
         vel_cost = -jnp.linalg.norm(reference[1:, 2] - state[:, 3])
@@ -101,16 +104,16 @@ class InferEnv():
         # jax.debug.print('vel_cost: {}', vel_cost)
         yaw_cost = -jnp.abs(jnp.sin(reference[1:, 3]) - jnp.sin(state[:, 4])) - \
             jnp.abs(jnp.cos(reference[1:, 4]) - jnp.cos(state[:, 4]))
-        cost += yaw_cost * 20.0
+        cost += yaw_cost * self.yaw_cost[stage_idx] 
         # jax.debug.print('yaw_cost: {}', yaw_cost)
         if obstacles is not None:
             pos = state[:, :2]                         # (n_steps, 2)
             diffs = pos[:, None, :] - obstacles[None, :, :]  # (n_steps, n_obs, 2)
             sqd = diffs[..., 0]**2 + diffs[..., 1]**2         # (n_steps, n_obs)
             d2 = jnp.min(sqd, axis=1)                         # (n_steps,)
-            obs_cost = -1.0 / (d2**3 + 1e-4)
+            obs_cost = -1.0 / (d2**2 + 1e-4)
             # obs_cost = jnp.clip(obs_cost, a_min=-30.0, a_max=0.0)
-            cost += obs_cost * 0.5
+            cost += obs_cost * self.obs_cost[stage_idx]
             # jax.debug.print('obs_cost: {}', obs_cost)
             
         # return 20*xy_cost + 15*vel_cost + 1*yaw_cost

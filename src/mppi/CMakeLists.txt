@@ -35,7 +35,7 @@ install(DIRECTORY dynamics_models utils
 )
 
 # yaml
-install(FILES config.yaml config_new_map.yaml config_map_edited.yaml config_park.yaml
+install(FILES  config_park_agh.yaml config_park_slot1.yaml
   DESTINATION share/${PROJECT_NAME}
 )
 

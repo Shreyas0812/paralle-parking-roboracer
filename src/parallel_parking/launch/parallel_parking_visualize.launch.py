@@ -3,7 +3,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
-    waypoint_file_name = "waypoints_park1.csv"
+    waypoint_file_name = "waypoints_park2.csv"
     
     scan_topic = "/scan"
     pose_topic = "/ego_racecar/odom"

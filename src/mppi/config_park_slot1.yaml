@@ -9,28 +9,32 @@ control_sample_std:
 - 0.5
 exp_name: mppi_tracking
 friction: 0.8
-init_vel: 2.0
+init_vel: 0.2
 is_sim: true
 map_dir: ./waypoints/
 map_ind: 0
 n_iterations: 1
 n_samples: 512
-n_steps: 10
+n_steps: 25
 norm_params:
 - - 4.0
   - -2.0
 - - 6.0
   - -3.0
 random_seed: 527787
-ref_vel: 5.0
+ref_vel: 0.3
 render: 1
 s_frame_max: 62.12059091197948
 sim_time_step: 0.1
-state_predictor: dynamic_ST
-wpt_delim: ;
-wpt_path: levine/levine.csv
-wpt_rowskip: 3
-wpt_thind: 3
-wpt_vind: 5
-wpt_xind: 1
-wpt_yind: 2
+state_predictor: kinematic_ST
+# wpt_delim: ","
+# wpt_path: map_edited/map_edited_smoothed_offset1.csv
+# wpt_rowskip: 0
+wpt_thind: 2
+# wpt_vind: 5
+wpt_xind: 0
+wpt_yind: 1
+
+xy_cost: [100.0, 100.0, 100.0]
+yaw_cost: [10.0, 20.0, 20.0]
+obs_cost: [0.1, 0.15, 0.15]

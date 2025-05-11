@@ -23,7 +23,7 @@ class TrajGen(Node):
         super().__init__("traj_gen_node")
         self.get_logger().info("Python traj_gen_node has been started.")
 
-        self.declare_parameter('waypoint_file_name', 'waypoints_park2.csv')
+        self.declare_parameter('waypoint_file_name', 'waypoints_park1.csv')
         self.declare_parameter("pose_topic", '/ego_racecar/odom')
         self.declare_parameter('extrapolated_path_topic', '/extrapolated_path')
         self.declare_parameter('wp1_dist_thresh', 0.5)
@@ -31,7 +31,7 @@ class TrajGen(Node):
         self.declare_parameter('wp1_angle_thresh', 0.34)
         self.declare_parameter('wp2_angle_thresh', 0.15)
         self.declare_parameter('switch_wp_index', 1)
-        self.declare_parameter('generate_s_curve', False)
+        self.declare_parameter('generate_s_curve', True)
 
         package_share_dir = get_package_share_directory("parallel_parking")
 

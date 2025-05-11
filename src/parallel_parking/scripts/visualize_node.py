@@ -43,7 +43,8 @@ class VisualizeNode(Node):
 
         waypoint_file_path = os.path.join(package_share_dir, 'config', waypoint_file_name)
         self.waypoints = np.array(load_waypoints(waypoint_file_path))
-
+        self.get_logger().info(f"Waypoints loaded from {waypoint_file_path}")
+        self.get_logger().info(f"Waypoints: {self.waypoints}")
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
