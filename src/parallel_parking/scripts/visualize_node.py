@@ -29,7 +29,7 @@ class VisualizeNode(Node):
         super().__init__("visualize_node")
         self.get_logger().info("Visualize Node Launched")
 
-        self.declare_parameter('waypoint_file_name', 'world_waypoints.csv')
+        self.declare_parameter('waypoint_file_name', '/home/yufeiyang/Documents/paralle-parking-roboracer/world_waypoints.csv')
         self.declare_parameter('visualize_wp_topic', '/visualization/waypoints')
         self.declare_parameter('extrapolated_path_topic', '/extrapolated_path')
         self.declare_parameter('visualize_extrapolated_wp_topic', '/visualization/extrapolated_path')
@@ -68,14 +68,7 @@ class VisualizeNode(Node):
     def visualize_waypoints(self):
         marker_array = MarkerArray()
         for i, wp in enumerate(self.waypoints):
-            try:
-                x, y, yaw, qw, qx, qy, qz = wp
-            except:
-                x, y, yaw = wp
-                qw = 1.0
-                qx = 0.0
-                qy = 0.0
-                qz = 0.0
+            x, y, yaw, qw, qx, qy, qz = wp
 
             marker = Marker()
             marker.header = Header()
