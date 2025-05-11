@@ -14,7 +14,7 @@ from ament_index_python.packages import get_package_share_directory
 
 import os
 import numpy as np
-from transforms3d.euler import quat2euler
+from transforms3d.euler import quat2euler, euler2quat
 
 from parallel_parking.utils import load_waypoints, normalize_angle, generateAckermannWaypoints, generate_s_curve_waypoints
 
@@ -155,7 +155,10 @@ class TrajGen(Node):
 
             pose = Pose()
             pose.position = Point(x=x, y=y, z=0.0)
-            pose.orientation = Quaternion(x=0.0, y=0.0, z=np.sin(yaw/2), w=np.cos(yaw/2))
+
+            # Convert yaw to quaternion
+            qw, qx, qy, qz = euler2quat(0.0, 0.0, yaw)
+            pose.orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
 
             path.traj.append(pose)
             if i == len(extrapolated_waypoints) - 1:
